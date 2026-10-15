@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">歪輸入法</string>
+    <string name="ime_name">歪輸入法 (日語對照)</string>
+    <string name="subtype_zh_pinyin">拼音 (日語學習)</string>
+    <string name="btn_enable_ime">1. 在系統設定中啟用歪輸入法</string>
+    <string name="btn_select_ime">2. 切換為歪輸入法</string>
+    <string name="welcome_hint">歪輸入法：打中文時即時顯示日語假名與對照釋義</string>
+</resources>

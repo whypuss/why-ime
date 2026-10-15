@@ -14,6 +14,7 @@ members = [
     "crates/bamboo-slip",
     "crates/qingjian-update",
     "apps/linux/server", "apps/cli", "apps/settings", "apps/macos", "apps/windows/server", "apps/windows/tsf", "apps/windows/settings", "tools/dict-convert", "tools/gloss-gen", "tools/release-sign",
+    "crates/wai-android",
 ]
 
 [workspace.package]
