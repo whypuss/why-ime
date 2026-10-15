@@ -7,8 +7,10 @@ use std::sync::Mutex;
 
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
-use jni::sys::{jint, jlong, jstring};
+use jni::sys::{jboolean, jint, jlong, jstring};
 
+use qingjian_core::shuangpin::Scheme;
+use qingjian_core::traditional::TraditionalVariant;
 use qingjian_core::{Candidate, Engine, Language, Query};
 use qingjian_dictionary::Dictionary;
 use qingjian_translate::Glossary;
@@ -137,6 +139,34 @@ impl WaiEngineHandle {
 
     pub fn get_raw_preedit(&self) -> String {
         self.engine.raw_preedit().text
+    }
+
+    pub fn set_fuzzy_rule(&mut self, name: &str, on: bool) {
+        let mut rules = self.engine.fuzzy();
+        rules.set(name, on);
+        self.engine.set_fuzzy(rules);
+    }
+
+    pub fn set_shuangpin_scheme(&mut self, scheme_str: &str) {
+        if scheme_str.is_empty() || scheme_str == "off" {
+            self.engine.set_shuangpin(None);
+        } else if let Ok(scheme) = scheme_str.parse::<Scheme>() {
+            self.engine.set_shuangpin(Some(scheme));
+        }
+    }
+
+    pub fn set_traditional(&mut self, variant_str: &str) {
+        let variant = match variant_str {
+            "taiwan" | "tw" => TraditionalVariant::Taiwan,
+            "hongkong" | "hk" => TraditionalVariant::Hongkong,
+            "standard" | "t" => TraditionalVariant::Standard,
+            _ => TraditionalVariant::Off,
+        };
+        self.engine.set_traditional(variant);
+    }
+
+    pub fn set_learning(&mut self, enabled: bool) {
+        self.engine.set_learning(enabled);
     }
 
     fn update_query(&mut self) -> EngineStateDto {
@@ -324,4 +354,81 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeGetRawPreedit
 
     let raw = handle.get_raw_preedit();
     env.new_string(raw).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeSetFuzzyRule(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    rule_name: JString,
+    enabled: jboolean,
+) {
+    if ptr == 0 {
+        return;
+    }
+    let rule_name: String = match env.get_string(&rule_name) {
+        Ok(s) => s.into(),
+        Err(_) => return,
+    };
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    if let Ok(mut handle) = handle_mutex.lock() {
+        handle.set_fuzzy_rule(&rule_name, enabled != 0);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeSetShuangpin(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    scheme: JString,
+) {
+    if ptr == 0 {
+        return;
+    }
+    let scheme: String = match env.get_string(&scheme) {
+        Ok(s) => s.into(),
+        Err(_) => return,
+    };
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    if let Ok(mut handle) = handle_mutex.lock() {
+        handle.set_shuangpin_scheme(&scheme);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeSetTraditional(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    variant: JString,
+) {
+    if ptr == 0 {
+        return;
+    }
+    let variant: String = match env.get_string(&variant) {
+        Ok(s) => s.into(),
+        Err(_) => return,
+    };
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    if let Ok(mut handle) = handle_mutex.lock() {
+        handle.set_traditional(&variant);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeSetLearning(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    enabled: jboolean,
+) {
+    if ptr == 0 {
+        return;
+    }
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    if let Ok(mut handle) = handle_mutex.lock() {
+        handle.set_learning(enabled != 0);
+    }
 }

@@ -16,10 +16,22 @@
   - 讓你每次日常打字聊天，都在潛移默化中復習日語單詞與漢字讀法。
 - **純本地離線辭庫**：
   隨包自帶 23.9 萬完整中日離線辭庫，絕不聯網上傳打字內容，無延遲、零隱私洩漏風險。
-- **Rust JNI 極致效能**：
-  核心拼音切分、模糊音、雙拼與注音由 `qingjian-core` 提供，查詞與日語標注全部在本地微秒級完成。
-- **Android 標準輸入法服務**：
-  基於 Android 標準 `InputMethodService` 構建，支援全局任意 App 呼出與流暢輸入。
+- **極致跟手觸覺與按鍵動效**：
+  - 採用低延遲 `ACTION_DOWN` 快速響應機制，擺脫普通按鍵抬手延遲，輸入體驗行雲流水。
+  - 按鍵微縮放動效 + 實時震動觸覺反饋（可在設定中開關）。
+- **完整鍵盤模式支援**：
+  - **拼音/英文鍵盤**：支援大小寫切換、空格上屏、回車鍵原樣上屏。
+  - **數字鍵盤 (123)**：常用數字與符號。
+  - **符號鍵盤 (#+=)**：括號、引號、數學與貨幣標點符號。
+  - **表情鍵盤 (😀)**：常用 Emoji 表情一鍵選入。
+  - **切換輸入法 (🌐)**：一鍵無縫輪換至系統中其他輸入法。
+- **豐富完備的輸入法設置（參考主流手機輸入法）**：
+  - **簡繁轉換**：簡體中文、繁體（台灣字形）、繁體（香港字形）、繁體（通用字形）。
+  - **模糊拼音**：支援 9 種獨立規則自由配置（`z ↔ zh`、`c ↔ ch`、`s ↔ sh`、`n ↔ l`、`f ↔ h`、`l ↔ r`、`an ↔ ang`、`en ↔ eng`、`in ↔ ing`）。
+  - **雙拼輸入**：支援小鶴雙拼、自然碼、微軟雙拼、搜狗雙拼、智能ABC、小浪雙拼、首道雙拼、拼音加加等。
+  - **鍵盤界面自訂**：候選字體大小調節（標準/大字/超大）、鍵盤高度調節（矮/標準/高）、震動開關、點擊動效開關。
+  - **詞頻記憶學習**：本地動態學習記錄，越用越懂你的常用詞。
+  - **應用內即時測試區**：改完設置即可在設置頁內直接打字驗證。
 
 ---
 
@@ -27,12 +39,12 @@
 
 你可以在 GitHub Releases 直接下載最新 APK 安裝包：
 
-👉 **[點此下載 why-ime-v0.1.0-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.0-alpha/why-ime-v0.1.0-alpha.apk)**
+👉 **[點此下載 why-ime-v0.1.2-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.2-alpha/why-ime-v0.1.2-alpha.apk)**
 
 ### 啟用步驟：
 1. 下載並安裝 APK。
-2. 打開「歪輸入法」App，點擊 **「1. 在系統設定中啟用歪輸入法」**，在系統鍵盤管理中將其開啟。
-3. 點擊 **「2. 切換為歪輸入法」** 或在打字時長按空格/輸入法切換鍵切換。
+2. 打開「歪輸入法」App，點擊 **「1. 在系統中啟用歪輸入法」**，在系統鍵盤管理中將其開啟。
+3. 點擊 **「2. 選擇歪輸入法為默認鍵盤」**，切換為歪輸入法。
 4. 開始打字，體驗中文候選詞旁邊即時浮現的日語對照！
 
 ---
@@ -40,10 +52,10 @@
 ## 🛠️ 開發與建置
 
 ### 架構概覽
-- `crates/qingjian-core`：拼音解析、候選生成、整句切分核心。
+- `crates/qingjian-core`：拼音解析、候選生成、整句切分、模糊音、雙拼與簡繁轉換核心。
 - `crates/qingjian-translate`：多語言對照辭庫引擎（中日、中英等）。
 - `crates/wai-android`：Rust ↔ Android JNI 橋接層，封裝 Engine 為 C-ABI 動態庫（`libwai_android.so`）。
-- `apps/android`：Android 原生輸入法殼（Kotlin、InputMethodService、自繪候選欄與軟鍵盤）。
+- `apps/android`：Android 原生輸入法殼（Kotlin、InputMethodService、自繪候選欄、軟鍵盤、以及設置中心）。
 
 ### 一鍵本機建置 (macOS / Linux)
 
@@ -58,11 +70,6 @@
 # 編譯 Rust JNI 本地庫並打包 APK
 bash apps/android/build.sh
 ```
-編譯產物將生成在：`apps/android/app/build/outputs/apk/debug/why-ime-v0.1.0-alpha.apk`。
 
----
-
-## 📄 開源許可
-
-本項目依據 [GPL-3.0-or-later](LICENSE) 許可證開源。  
-感謝 [青簡團隊 (qingjian-team)](https://github.com/qingjian-team/qingjian) 的優秀開源內核。
+產生的 APK 位於：
+`apps/android/app/build/outputs/apk/debug/app-debug.apk`

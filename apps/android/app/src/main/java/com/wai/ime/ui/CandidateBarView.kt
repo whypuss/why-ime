@@ -21,11 +21,19 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
     private val candidateContainer: LinearLayout
 
     var onCandidateClickListener: ((Int) -> Unit)? = null
+    var candidateFontSize: Float = 18f
+        set(value) {
+            field = value
+            refreshCurrentViews()
+        }
+
+    private var lastPreedit: String = ""
+    private var lastCandidates: List<Candidate> = emptyList()
 
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.parseColor("#F5F5F7"))
-        setPadding(12, 8, 12, 8)
+        setPadding(dpToPx(6), dpToPx(4), dpToPx(6), dpToPx(4))
 
         // 頂部拼音顯示
         preeditView = TextView(context).apply {
@@ -33,7 +41,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             setTextColor(Color.parseColor("#007AFF"))
             typeface = Typeface.DEFAULT_BOLD
             visibility = View.GONE
-            setPadding(16, 4, 16, 4)
+            setPadding(dpToPx(8), dpToPx(2), dpToPx(8), dpToPx(2))
         }
         addView(preeditView)
 
@@ -65,6 +73,9 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
      * 更新候選條狀態
      */
     fun updateState(preedit: String, candidates: List<Candidate>) {
+        lastPreedit = preedit
+        lastCandidates = candidates
+
         if (preedit.isNotBlank()) {
             preeditView.text = preedit
             preeditView.visibility = View.VISIBLE
@@ -85,11 +96,15 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         scrollView.scrollTo(0, 0)
     }
 
+    private fun refreshCurrentViews() {
+        updateState(lastPreedit, lastCandidates)
+    }
+
     private fun createCandidateItemView(index: Int, candidate: Candidate): View {
         val itemLayout = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24, 8, 24, 8)
+            setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4))
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
@@ -101,7 +116,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         // 1. 中文候選字 (第一行)
         val chineseText = TextView(context).apply {
             text = "${index + 1}. ${candidate.text}"
-            textSize = 17f
+            textSize = candidateFontSize
             setTextColor(Color.parseColor("#1C1C1E"))
             typeface = Typeface.DEFAULT_BOLD
         }
@@ -112,7 +127,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         if (japaneseLabel != null) {
             val japaneseText = TextView(context).apply {
                 text = japaneseLabel
-                textSize = 11f
+                textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
                 setTextColor(Color.parseColor("#8E8E93"))
                 maxLines = 1
             }
@@ -120,5 +135,10 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         }
 
         return itemLayout
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        val density = context.resources.displayMetrics.density
+        return (dp * density).toInt()
     }
 }

@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import com.wai.ime.core.Candidate
+import com.wai.ime.core.SettingsRepository
 import com.wai.ime.core.WaiNativeEngine
 import com.wai.ime.ui.CandidateBarView
 import com.wai.ime.ui.KeyboardView
@@ -20,14 +21,19 @@ class WaiInputMethodService : InputMethodService() {
     private lateinit var rootView: LinearLayout
     private lateinit var candidateBarView: CandidateBarView
     private lateinit var keyboardView: KeyboardView
+    private lateinit var settings: SettingsRepository
 
     private var currentCandidates: List<Candidate> = emptyList()
 
     override fun onCreate() {
         super.onCreate()
+        settings = SettingsRepository.getInstance(applicationContext)
         // 異步在後台初始化 Rust 辭典，避免阻塞啟動主線程
         Thread {
-            WaiNativeEngine.initialize(applicationContext, "ja")
+            val ok = WaiNativeEngine.initialize(applicationContext, settings.targetLanguage)
+            if (ok) {
+                settings.applyToEngine()
+            }
         }.start()
     }
 
@@ -46,6 +52,7 @@ class WaiInputMethodService : InputMethodService() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
+            candidateFontSize = settings.candidateFontSize.toFloat()
             onCandidateClickListener = { index ->
                 commitCandidateByIndex(index)
             }
@@ -53,8 +60,8 @@ class WaiInputMethodService : InputMethodService() {
         rootView.addView(candidateBarView)
 
         // 2. 底部鍵盤區域
+        val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
         keyboardView = KeyboardView(this).apply {
-            val heightInPx = (250 * resources.displayMetrics.density).toInt()
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 heightInPx
@@ -82,6 +89,13 @@ class WaiInputMethodService : InputMethodService() {
 
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        // 每次彈出鍵盤時，刷新最新設置
+        settings.applyToEngine()
+        candidateBarView.candidateFontSize = settings.candidateFontSize.toFloat()
+        val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
+        keyboardView.layoutParams = (keyboardView.layoutParams as LinearLayout.LayoutParams).apply {
+            height = heightInPx
+        }
         resetComposing()
         keyboardView.renderKeyboard()
     }
@@ -97,13 +111,14 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun handleKeyInput(key: String) {
+        // 如果是單個英文字母，且非雙拼方案禁用全拼，則進入拼音/雙拼處理
         if (key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
             val state = WaiNativeEngine.feedChar(key[0].lowercaseChar())
             currentCandidates = state.candidates
             currentInputConnection?.setComposingText(state.preedit, 1)
             candidateBarView.updateState(state.preedit, currentCandidates)
         } else {
-            // 數字、標點符號或非拼音鍵
+            // 數字、標點符號、表情或非拼音鍵
             if (currentCandidates.isNotEmpty()) {
                 commitCandidateByIndex(0)
             }

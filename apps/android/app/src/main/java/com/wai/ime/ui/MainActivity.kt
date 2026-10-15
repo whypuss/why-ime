@@ -1,61 +1,496 @@
 package com.wai.ime.ui
 
+import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
-import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.wai.ime.R
+import com.wai.ime.core.SettingsRepository
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var settings: SettingsRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        settings = SettingsRepository.getInstance(this)
+
+        val scrollView = ScrollView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.parseColor("#F2F2F7"))
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(48, 48, 48, 48)
+            setPadding(dpToPx(16), dpToPx(24), dpToPx(16), dpToPx(36))
         }
+        scrollView.addView(root)
 
+        // 頂部標題
         val titleView = TextView(this).apply {
             text = getString(R.string.app_name)
-            textSize = 26f
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 16)
+            textSize = 28f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1C1C1E"))
         }
         root.addView(titleView)
 
         val descView = TextView(this).apply {
             text = getString(R.string.welcome_hint)
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 64)
+            textSize = 14f
+            setTextColor(Color.parseColor("#8E8E93"))
+            setPadding(0, dpToPx(4), 0, dpToPx(16))
         }
         root.addView(descView)
 
-        val btnEnable = Button(this).apply {
-            text = getString(R.string.btn_enable_ime)
-            setOnClickListener {
-                val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                startActivity(intent)
+        // 1. 啟用向導卡片
+        root.addView(createActivationCard())
+
+        // 2. 即時測試輸入框卡片
+        root.addView(createTestInputCard())
+
+        // 3. 常規設置（簡繁體、模糊拼音、記憶學習）
+        root.addView(createSectionHeader("常規設置 (輸入與詞庫)"))
+        root.addView(createGeneralSettingsCard())
+
+        // 4. 鍵盤界面設置（字體大小、高度、震動、動效）
+        root.addView(createSectionHeader("鍵盤界面設置"))
+        root.addView(createKeyboardInterfaceCard())
+
+        // 5. 高級設置（雙拼方案）
+        root.addView(createSectionHeader("高級設置 (雙拼方案)"))
+        root.addView(createAdvancedSettingsCard())
+
+        // 6. 關於歪輸入法
+        root.addView(createSectionHeader("關於"))
+        root.addView(createAboutCard())
+
+        setContentView(scrollView)
+    }
+
+    private fun createActivationCard(): View {
+        val card = createCardLayout()
+
+        val cardTitle = TextView(this).apply {
+            text = "輸入法啟用狀態"
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1C1C1E"))
+            setPadding(0, 0, 0, dpToPx(12))
+        }
+        card.addView(cardTitle)
+
+        val btnEnable = createActionButton("1. 在系統中啟用歪輸入法") {
+            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+            startActivity(intent)
+        }
+        card.addView(btnEnable)
+
+        val btnSelect = createActionButton("2. 選擇歪輸入法為默認鍵盤") {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showInputMethodPicker()
+        }
+        card.addView(btnSelect)
+
+        return card
+    }
+
+    private fun createTestInputCard(): View {
+        val card = createCardLayout()
+
+        val cardTitle = TextView(this).apply {
+            text = "輸入法測試區"
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1C1C1E"))
+            setPadding(0, 0, 0, dpToPx(8))
+        }
+        card.addView(cardTitle)
+
+        val hintView = TextView(this).apply {
+            text = "點擊下方輸入框彈出歪輸入法，嘗試輸入拼音（如：kaifa、riben、xuexi）"
+            textSize = 13f
+            setTextColor(Color.parseColor("#8E8E93"))
+            setPadding(0, 0, 0, dpToPx(10))
+        }
+        card.addView(hintView)
+
+        val editText = EditText(this).apply {
+            setHint("點此測試歪輸入法...")
+            textSize = 16f
+            setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#F2F2F7"))
+                cornerRadius = dpToPx(8).toFloat()
+                setStroke(dpToPx(1), Color.parseColor("#E5E5EA"))
             }
         }
-        root.addView(btnEnable)
+        card.addView(editText)
 
-        val btnSelect = Button(this).apply {
-            text = getString(R.string.btn_select_ime)
-            setOnClickListener {
-                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.showInputMethodPicker()
+        return card
+    }
+
+    private fun createGeneralSettingsCard(): View {
+        val card = createCardLayout()
+
+        // 簡繁切換
+        val traditionalLabels = arrayOf("簡體中文", "繁體（台灣字形）", "繁體（香港字形）", "繁體（通用字形）")
+        val traditionalValues = arrayOf("off", "taiwan", "hongkong", "standard")
+        val currentTradIndex = traditionalValues.indexOf(settings.traditionalVariant).coerceAtLeast(0)
+
+        card.addView(createClickableRow("簡繁中文轉換", traditionalLabels[currentTradIndex]) { summaryView ->
+            val checked = traditionalValues.indexOf(settings.traditionalVariant).coerceAtLeast(0)
+            AlertDialog.Builder(this)
+                .setTitle("選擇簡繁中文轉換模式")
+                .setSingleChoiceItems(traditionalLabels, checked) { dialog, which ->
+                    settings.traditionalVariant = traditionalValues[which]
+                    summaryView.text = traditionalLabels[which]
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        })
+
+        addDivider(card)
+
+        // 模糊拼音詳細設定
+        card.addView(createClickableRow("模糊拼音設置", "設定 z/zh, c/ch, an/ang 等 9 種模糊音") {
+            showFuzzySettingsDialog()
+        })
+
+        addDivider(card)
+
+        // 記憶學習
+        card.addView(createSwitchRow("詞頻記憶學習", "根據個人輸入習慣動態調整候選詞頻", settings.learningEnabled) { isChecked ->
+            settings.learningEnabled = isChecked
+        })
+
+        return card
+    }
+
+    private fun createKeyboardInterfaceCard(): View {
+        val card = createCardLayout()
+
+        // 按鍵震動
+        card.addView(createSwitchRow("按鍵震動反饋", "敲擊按鍵時提供即時震動跟手反饋", settings.keyVibration) { isChecked ->
+            settings.keyVibration = isChecked
+        })
+
+        addDivider(card)
+
+        // 按鍵點擊動效
+        card.addView(createSwitchRow("按鍵點擊動畫", "點擊按鍵時縮放微動效", settings.keyAnimation) { isChecked ->
+            settings.keyAnimation = isChecked
+        })
+
+        addDivider(card)
+
+        // 候選字體大小
+        val fontLabels = arrayOf("標準 (15sp)", "大字 (18sp)", "超大 (22sp)")
+        val fontSizes = arrayOf(15, 18, 22)
+        val currentFontIndex = fontSizes.indexOf(settings.candidateFontSize).let { if (it >= 0) it else 1 }
+
+        card.addView(createClickableRow("候選字體大小", fontLabels[currentFontIndex]) { summaryView ->
+            val checked = fontSizes.indexOf(settings.candidateFontSize).let { if (it >= 0) it else 1 }
+            AlertDialog.Builder(this)
+                .setTitle("選擇候選字體大小")
+                .setSingleChoiceItems(fontLabels, checked) { dialog, which ->
+                    settings.candidateFontSize = fontSizes[which]
+                    summaryView.text = fontLabels[which]
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        })
+
+        addDivider(card)
+
+        // 鍵盤高度
+        val heightLabels = arrayOf("矮鍵盤 (225dp)", "標準鍵盤 (255dp)", "高鍵盤 (285dp)")
+        val heights = arrayOf(225, 255, 285)
+        val currentHeightIndex = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
+
+        card.addView(createClickableRow("鍵盤高度調節", heightLabels[currentHeightIndex]) { summaryView ->
+            val checked = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
+            AlertDialog.Builder(this)
+                .setTitle("選擇鍵盤高度")
+                .setSingleChoiceItems(heightLabels, checked) { dialog, which ->
+                    settings.keyboardHeightDp = heights[which]
+                    summaryView.text = heightLabels[which]
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        })
+
+        return card
+    }
+
+    private fun createAdvancedSettingsCard(): View {
+        val card = createCardLayout()
+
+        val schemeLabels = arrayOf(
+            "全拼 (關閉雙拼)",
+            "小鶴雙拼",
+            "自然碼雙拼",
+            "微軟雙拼",
+            "搜狗雙拼",
+            "智能 ABC 雙拼",
+            "小浪雙拼",
+            "首道雙拼",
+            "拼音加加雙拼"
+        )
+        val schemeValues = arrayOf(
+            "off",
+            "xiaohe",
+            "ziranma",
+            "microsoft",
+            "sogou",
+            "abc",
+            "xiaolang",
+            "shoudao",
+            "jiajia"
+        )
+        val currentIndex = schemeValues.indexOf(settings.shuangpinScheme).coerceAtLeast(0)
+
+        card.addView(createClickableRow("雙拼輸入方案", schemeLabels[currentIndex]) { summaryView ->
+            val checked = schemeValues.indexOf(settings.shuangpinScheme).coerceAtLeast(0)
+            AlertDialog.Builder(this)
+                .setTitle("選擇雙拼輸入方案")
+                .setSingleChoiceItems(schemeLabels, checked) { dialog, which ->
+                    settings.shuangpinScheme = schemeValues[which]
+                    summaryView.text = schemeLabels[which]
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        })
+
+        return card
+    }
+
+    private fun createAboutCard(): View {
+        val card = createCardLayout()
+
+        val infoTitle = TextView(this).apply {
+            text = "歪輸入法 (Why IME) for Android"
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#1C1C1E"))
+        }
+        card.addView(infoTitle)
+
+        val infoDesc = TextView(this).apply {
+            text = "版本：v0.1.2-alpha\n特點：打中文即時提示日語假名讀音、翻譯釋義及詞性；支援全拼、雙拼、模糊音、簡繁轉換與極速跟手觸覺反饋。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
+            textSize = 13f
+            setTextColor(Color.parseColor("#3C3C43"))
+            setPadding(0, dpToPx(6), 0, dpToPx(12))
+        }
+        card.addView(infoDesc)
+
+        val btnGithub = createActionButton("訪問 GitHub 開源項目倉庫") {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/qingjian-team/why-ime"))
+            startActivity(intent)
+        }
+        card.addView(btnGithub)
+
+        return card
+    }
+
+    private fun showFuzzySettingsDialog() {
+        val rules = arrayOf(
+            "z_zh" to "z ↔ zh",
+            "c_ch" to "c ↔ ch",
+            "s_sh" to "s ↔ sh",
+            "n_l" to "n ↔ l",
+            "f_h" to "f ↔ h",
+            "l_r" to "l ↔ r",
+            "an_ang" to "an ↔ ang",
+            "en_eng" to "en ↔ eng",
+            "in_ing" to "in ↔ ing"
+        )
+        val names = rules.map { it.second }.toTypedArray()
+        val checkedItems = BooleanArray(rules.size) { i ->
+            settings.isFuzzyEnabled(rules[i].first)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("模糊拼音規則開關")
+            .setMultiChoiceItems(names, checkedItems) { _, which, isChecked ->
+                settings.setFuzzyEnabled(rules[which].first, isChecked)
+            }
+            .setPositiveButton("完成", null)
+            .show()
+    }
+
+    // ================= UI 輔助方法 =================
+
+    private fun createCardLayout(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dpToPx(12).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, dpToPx(14))
             }
         }
-        root.addView(btnSelect)
+    }
 
-        setContentView(root)
+    private fun createSectionHeader(title: String): TextView {
+        return TextView(this).apply {
+            text = title
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#6E6E73"))
+            setPadding(dpToPx(4), dpToPx(8), dpToPx(4), dpToPx(6))
+        }
+    }
+
+    private fun createActionButton(text: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#007AFF"))
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#F2F2F7"))
+                cornerRadius = dpToPx(8).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, dpToPx(4), 0, dpToPx(6))
+            }
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun createSwitchRow(
+        title: String,
+        subtitle: String,
+        initialValue: Boolean,
+        onCheckedChange: (Boolean) -> Unit
+    ): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dpToPx(10), 0, dpToPx(10))
+        }
+
+        val textLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val titleView = TextView(this).apply {
+            text = title
+            textSize = 15f
+            setTextColor(Color.parseColor("#1C1C1E"))
+        }
+        textLayout.addView(titleView)
+
+        val subView = TextView(this).apply {
+            text = subtitle
+            textSize = 12f
+            setTextColor(Color.parseColor("#8E8E93"))
+        }
+        textLayout.addView(subView)
+
+        val switch = Switch(this).apply {
+            isChecked = initialValue
+            setOnCheckedChangeListener { _, isChecked ->
+                onCheckedChange(isChecked)
+            }
+        }
+
+        row.addView(textLayout)
+        row.addView(switch)
+        return row
+    }
+
+    private fun createClickableRow(
+        title: String,
+        currentSummary: String,
+        onClick: (summaryView: TextView) -> Unit
+    ): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dpToPx(12), 0, dpToPx(12))
+            isClickable = true
+            isFocusable = true
+        }
+
+        val titleView = TextView(this).apply {
+            text = title
+            textSize = 15f
+            setTextColor(Color.parseColor("#1C1C1E"))
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        row.addView(titleView)
+
+        val summaryView = TextView(this).apply {
+            text = currentSummary
+            textSize = 14f
+            setTextColor(Color.parseColor("#007AFF"))
+            setPadding(dpToPx(8), 0, dpToPx(4), 0)
+        }
+        row.addView(summaryView)
+
+        val arrowView = TextView(this).apply {
+            text = "›"
+            textSize = 18f
+            setTextColor(Color.parseColor("#C7C7CC"))
+        }
+        row.addView(arrowView)
+
+        row.setOnClickListener {
+            onClick(summaryView)
+        }
+
+        return row
+    }
+
+    private fun addDivider(container: LinearLayout) {
+        val divider = View(this).apply {
+            setBackgroundColor(Color.parseColor("#E5E5EA"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dpToPx(1)
+            )
+        }
+        container.addView(divider)
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        val density = resources.displayMetrics.density
+        return (dp * density).toInt()
     }
 }

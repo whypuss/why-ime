@@ -16,16 +16,18 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import com.wai.ime.core.SettingsRepository
 
 enum class KeyboardMode {
     TEXT,
     NUMERIC,
-    SYMBOL
+    SYMBOL,
+    EMOJI
 }
 
 /**
  * 鍵盤視圖：支援跟手觸控響應、按鍵漣漪/高亮動畫、震動觸覺反饋、
- * 數字鍵盤切換、符號鍵盤切換、以及一鍵切換系統其他輸入法 (Globe 🌐)
+ * 數字鍵盤、符號鍵盤、表情(Emoji)鍵盤、以及一鍵切換系統其他輸入法 (Globe 🌐)
  */
 class KeyboardView(context: Context) : LinearLayout(context) {
 
@@ -37,6 +39,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
 
     private var currentMode = KeyboardMode.TEXT
     private var isShifted = false
+    private val settings = SettingsRepository.getInstance(context)
 
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -49,11 +52,12 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.parseColor("#D1D3D9"))
-        setPadding(dpToPx(4), dpToPx(8), dpToPx(4), dpToPx(12))
+        setPadding(dpToPx(4), dpToPx(6), dpToPx(4), dpToPx(10))
         renderKeyboard()
     }
 
     private fun triggerHaptic() {
+        if (!settings.keyVibration) return
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -71,6 +75,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             KeyboardMode.TEXT -> renderTextKeyboard()
             KeyboardMode.NUMERIC -> renderNumericKeyboard()
             KeyboardMode.SYMBOL -> renderSymbolKeyboard()
+            KeyboardMode.EMOJI -> renderEmojiKeyboard()
         }
     }
 
@@ -197,7 +202,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         addView(createBottomRow())
     }
 
-    // ================= 3. 更多符號鍵盤 =================
+    // ================= 3. 符號鍵盤 =================
     private fun renderSymbolKeyboard() {
         val row1 = listOf("【", "】", "{", "}", "#", "%", "^", "*", "+", "=")
         val row2 = listOf("_", "\\", "|", "~", "<", ">", "$", "€", "￡", "•")
@@ -240,6 +245,40 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         addView(createBottomRow())
     }
 
+    // ================= 4. 表情 (Emoji) 鍵盤 =================
+    private fun renderEmojiKeyboard() {
+        val row1 = listOf("😀", "😂", "🤣", "😍", "🥰", "😎", "🥳", "🤔")
+        val row2 = listOf("😭", "🥺", "😡", "😱", "👍", "👏", "🙏", "🎉")
+        val row3 = listOf("❤️", "✨", "🔥", "💯", "🌸", "🍱", "🍙", "✈️")
+
+        addView(createKeyRowSimple(row1))
+        addView(createKeyRowSimple(row2))
+
+        val row3Layout = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            setPadding(0, dpToPx(3), 0, dpToPx(3))
+        }
+
+        for (k in row3) {
+            val btn = createKeyButton(k).apply {
+                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+                    setMargins(dpToPx(3), 0, dpToPx(3), 0)
+                }
+                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            }
+            row3Layout.addView(btn)
+        }
+
+        val delBtn = createSpecialButton("⌫", weight = 1.2f).apply {
+            setFastTouchListener { onBackspaceListener?.invoke() }
+        }
+        row3Layout.addView(delBtn)
+        addView(row3Layout)
+
+        addView(createBottomRow())
+    }
+
     private fun createKeyRowSimple(keys: List<String>): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -259,7 +298,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         return row
     }
 
-    // ================= 底部功能行 (模式切換/切換輸入法/空格/回車) =================
+    // ================= 底部功能行 (模式切換/切換輸入法/表情/空格/回車) =================
     private fun createBottomRow(): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -268,7 +307,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
 
         // 1. 數字/拼音切換鍵
-        val modeLabel = if (currentMode == KeyboardMode.TEXT) "123" else "中/英"
+        val modeLabel = if (currentMode == KeyboardMode.TEXT) "123" else "拼音"
         val modeBtn = createSpecialButton(modeLabel, weight = 1.3f).apply {
             setFastTouchListener {
                 currentMode = if (currentMode == KeyboardMode.TEXT) KeyboardMode.NUMERIC else KeyboardMode.TEXT
@@ -285,14 +324,14 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
         row.addView(switchImeBtn)
 
-        // 3. 常用逗號
-        val commaBtn = createKeyButton("，").apply {
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                setMargins(dpToPx(3), 0, dpToPx(3), 0)
+        // 3. 表情 Emoji 切換鍵 (😀)
+        val emojiBtn = createSpecialButton("😀", weight = 1.0f).apply {
+            setFastTouchListener {
+                currentMode = if (currentMode == KeyboardMode.EMOJI) KeyboardMode.TEXT else KeyboardMode.EMOJI
+                renderKeyboard()
             }
-            setFastTouchListener { onKeyClickListener?.invoke("，") }
         }
-        row.addView(commaBtn)
+        row.addView(emojiBtn)
 
         // 4. 空格鍵
         val spaceBtn = Button(context).apply {
@@ -301,21 +340,21 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setTextColor(Color.parseColor("#8E8E93"))
             background = createKeyBackground(Color.WHITE, Color.parseColor("#E5E5EA"))
             isAllCaps = false
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 3.5f).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 3.2f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
             setFastTouchListener { onSpaceListener?.invoke() }
         }
         row.addView(spaceBtn)
 
-        // 5. 常用句號
-        val periodBtn = createKeyButton("。").apply {
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+        // 5. 常用標點 (。 或 ，)
+        val punctBtn = createKeyButton("。").apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.9f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
             setFastTouchListener { onKeyClickListener?.invoke("。") }
         }
-        row.addView(periodBtn)
+        row.addView(punctBtn)
 
         // 6. 回車/換行鍵
         val enterBtn = Button(context).apply {
@@ -323,7 +362,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             textSize = 20f
             setTextColor(Color.WHITE)
             background = createKeyBackground(Color.parseColor("#007AFF"), Color.parseColor("#0056B3"))
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.4f).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.3f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
             setFastTouchListener { onEnterListener?.invoke() }
@@ -344,15 +383,19 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     v.isPressed = true
-                    v.scaleX = 0.94f
-                    v.scaleY = 0.94f
+                    if (settings.keyAnimation) {
+                        v.scaleX = 0.94f
+                        v.scaleY = 0.94f
+                    }
                     triggerHaptic()
                     onTrigger()
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     v.isPressed = false
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    if (settings.keyAnimation) {
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    }
                     true
                 }
                 else -> false
@@ -363,7 +406,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     private fun createKeyButton(label: String): Button {
         return Button(context).apply {
             text = label
-            textSize = 19f
+            textSize = if (label.length > 1 && label.codePointCount(0, label.length) > 1) 16f else 19f
             setTextColor(Color.parseColor("#1C1C1E"))
             background = createKeyBackground(Color.WHITE, Color.parseColor("#E2E4E9"))
             isAllCaps = false

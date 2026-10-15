@@ -76,6 +76,26 @@ object WaiNativeEngine {
         return nativeGetRawPreedit(nativeHandle)
     }
 
+    fun setFuzzyRule(ruleName: String, enabled: Boolean) {
+        if (!isInitialized || nativeHandle == 0L) return
+        nativeSetFuzzyRule(nativeHandle, ruleName, enabled)
+    }
+
+    fun setShuangpin(scheme: String) {
+        if (!isInitialized || nativeHandle == 0L) return
+        nativeSetShuangpin(nativeHandle, scheme)
+    }
+
+    fun setTraditional(variant: String) {
+        if (!isInitialized || nativeHandle == 0L) return
+        nativeSetTraditional(nativeHandle, variant)
+    }
+
+    fun setLearning(enabled: Boolean) {
+        if (!isInitialized || nativeHandle == 0L) return
+        nativeSetLearning(nativeHandle, enabled)
+    }
+
     fun destroy() {
         if (nativeHandle != 0L) {
             nativeDestroy(nativeHandle)
@@ -104,4 +124,8 @@ object WaiNativeEngine {
     private external fun nativeClear(ptr: Long)
     private external fun nativeCommitCandidate(ptr: Long, index: Int): String
     private external fun nativeGetRawPreedit(ptr: Long): String
+    private external fun nativeSetFuzzyRule(ptr: Long, ruleName: String, enabled: Boolean)
+    private external fun nativeSetShuangpin(ptr: Long, scheme: String)
+    private external fun nativeSetTraditional(ptr: Long, variant: String)
+    private external fun nativeSetLearning(ptr: Long, enabled: Boolean)
 }
