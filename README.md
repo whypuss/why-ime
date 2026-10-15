@@ -1,55 +1,68 @@
-<p align="center">
-  <img src="assets/icon/qingjian-mark.svg" alt="青简竹简图标" height="108">
-</p>
+# 歪輸入法 (Why IME)
 
-<h1 align="center">青简 Qingjian</h1>
+> **打中文，學外語。**  
+> 基於 [青簡 (Qingjian)](https://github.com/qingjian-team/qingjian) 高性能 Rust 核心移植的 Android 雙語學習輸入法。
 
-<p align="center"><strong>好好输入，顺便多认识一个词。</strong></p>
+[![GitHub Release](https://img.shields.io/github/v/release/whypuss/why-ime)](https://github.com/whypuss/why-ime/releases)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-<p align="center">
-  <a href="https://qingjian.app/download"><img src="https://img.shields.io/github/v/release/qingjian-team/qingjian?label=stable" alt="stable release"></a>
-  <a href="https://github.com/qingjian-team/qingjian/stargazers"><img src="https://img.shields.io/github/stars/qingjian-team/qingjian?style=flat&amp;label=Stars" alt="GitHub Stars"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later"></a>
-  <a href="https://qingjian.app/docs/getting-started/install"><img src="https://img.shields.io/badge/macOS-13%2B-blue" alt="macOS 13+"></a>
-  <a href="https://qingjian.app/docs/getting-started/install"><img src="https://img.shields.io/badge/Windows-10%2F11-blue" alt="Windows 10/11"></a>
-  <a href="https://qingjian.app/docs/getting-started/linux"><img src="https://img.shields.io/badge/Linux-Fcitx5%20manual-lightgrey" alt="Linux Fcitx5，手动启动"></a>
-</p>
+---
 
-青简是一款输入法。你可以像平常一样打字：输入拼音、选择候选、写完整句；候选旁的一条译词，让语言学习自然发生在日常输入里。译词始终只是辅助信息，不会盖过你要输入的文字。
+## 📱 核心特色
 
-https://github.com/user-attachments/assets/d145fde9-a641-4543-8b15-dd7a2685de3d
+- **打中文即時顯示日語對照**：
+  在打中文拼音時，候選條第一行顯示中文詞，第二行即時浮現**日語釋義與假名注音（Furigana）**。
+  - 輸入 `kaifa` → `1. 開發` 下方展示 `開発する [かいはつする] (v.)`。
+  - 讓你每次日常打字聊天，都在潛移默化中復習日語單詞與漢字讀法。
+- **純本地離線辭庫**：
+  隨包自帶 23.9 萬完整中日離線辭庫，絕不聯網上傳打字內容，無延遲、零隱私洩漏風險。
+- **Rust JNI 極致效能**：
+  核心拼音切分、模糊音、雙拼與注音由 `qingjian-core` 提供，查詞與日語標注全部在本地微秒級完成。
+- **Android 標準輸入法服務**：
+  基於 Android 標準 `InputMethodService` 構建，支援全局任意 App 呼出與流暢輸入。
 
-视频演示了青简在 macOS 上的整句输入、候选重排和候选译词。
+---
 
-## 下载与开始使用
+## 📥 下載與安裝
 
-- **macOS、Windows**：[下载青简](https://qingjian.app/download)；安装步骤见[使用文档](https://qingjian.app/docs/getting-started/install)。
-- **Linux**：已有 Fcitx5 版本，使用系统默认候选面板；目前需要手动启动后台服务，详见 [Linux 安装说明](https://qingjian.app/docs/getting-started/linux)。
+你可以在 GitHub Releases 直接下載最新 APK 安裝包：
 
-macOS 与 Windows 版本仍处于测试阶段。安装后先选中青简，在「偏好设置 / 设置 → 通用」选择想学习的语言，就可以开始输入。第一次使用可从[第一次输入](https://qingjian.app/docs/getting-started/first-input)读起。
+👉 **[點此下載 why-ime-v0.1.0-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.0-alpha/why-ime-v0.1.0-alpha.apk)**
 
-## 输入时，你会看到什么
+### 啟用步驟：
+1. 下載並安裝 APK。
+2. 打開「歪輸入法」App，點擊 **「1. 在系統設定中啟用歪輸入法」**，在系統鍵盤管理中將其開啟。
+3. 點擊 **「2. 切換為歪輸入法」** 或在打字時長按空格/輸入法切換鍵切換。
+4. 開始打字，體驗中文候選詞旁邊即時浮現的日語對照！
 
-```text
-1  开发        development
-2  编程        programming
-3  架构        architecture
+---
+
+## 🛠️ 開發與建置
+
+### 架構概覽
+- `crates/qingjian-core`：拼音解析、候選生成、整句切分核心。
+- `crates/qingjian-translate`：多語言對照辭庫引擎（中日、中英等）。
+- `crates/wai-android`：Rust ↔ Android JNI 橋接層，封裝 Engine 為 C-ABI 動態庫（`libwai_android.so`）。
+- `apps/android`：Android 原生輸入法殼（Kotlin、InputMethodService、自繪候選欄與軟鍵盤）。
+
+### 一鍵本機建置 (macOS / Linux)
+
+需要環境：
+- Rust 1.80+ (`rustup target add aarch64-linux-android x86_64-linux-android`)
+- `cargo-ndk`
+- Android SDK & NDK r25+
+- OpenJDK 17
+
+執行一鍵建置：
+```bash
+# 編譯 Rust JNI 本地庫並打包 APK
+bash apps/android/build.sh
 ```
+編譯產物將生成在：`apps/android/app/build/outputs/apk/debug/why-ime-v0.1.0-alpha.apk`。
 
-候选旁一次只显示一种学习语言的译词。目前可以选择英语、日语或西班牙语，也可以关闭译词显示。青简还支持整句输入、简拼、拼写纠错、双拼、五笔等输入方式；本地整句模型会在停顿后调整句子候选。
+---
 
-「统计」页还会显示今天、最近 7 天和累计的输入量，以及学习语言的词汇记录。详细用法见[输入功能](https://qingjian.app/docs/input)、[译词与生词](https://qingjian.app/docs/learning/translation)、[本地统计](https://qingjian.app/docs/learning/statistics)和[按键与快捷键](https://qingjian.app/docs/getting-started/keys)。
+## 📄 開源許可
 
-## 数据与隐私
-
-拼音转换、词库查询、本地模型和输入习惯学习在你的设备上完成。输入量与词汇统计也只保存在本机，不会上传；青简不需要账号。输入日志与统计分开保存，日志可在设置中关闭或清空，不影响统计。检查更新会向官网请求版本列表，可在设置中关闭。
-
-可选的**云联想默认关闭**。开启后，青简会把当前输入和附近的文字直接发送给你自行填写的 AI 服务商，以获取候选或整句补全；请求不经过青简的服务器。发送范围与本机保存的数据，见[数据与日志](https://qingjian.app/docs/help/data-and-logs)。
-
-## 文档、反馈与参与开发
-
-- [使用文档](https://qingjian.app/docs)：安装、设置、输入、卸载与常见问题。
-- [反馈问题或建议](https://github.com/qingjian-team/qingjian/issues/new/choose)；也可以加入 [QQ 内测交流群](https://qm.qq.com/q/jBvn2gGTxm)。
-- 想参与开发？从[开发文档](docs/)和[开发约定](docs/contributing.md)开始。
-
-青简在[官方渠道](https://qingjian.app/download)免费提供。代码采用 [GPL-3.0-or-later](LICENSE) 许可；项目名称与 logo 不包含在代码授权中。随包数据有各自的来源与许可，见[数据来源清单](docs/design/landscape.md)。
+本項目依據 [GPL-3.0-or-later](LICENSE) 許可證開源。  
+感謝 [青簡團隊 (qingjian-team)](https://github.com/qingjian-team/qingjian) 的優秀開源內核。
