@@ -1,8 +1,11 @@
 package com.wai.ime.service
 
+import android.content.Context
 import android.inputmethodservice.InputMethodService
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import com.wai.ime.core.Candidate
 import com.wai.ime.core.WaiNativeEngine
@@ -51,7 +54,7 @@ class WaiInputMethodService : InputMethodService() {
 
         // 2. 底部鍵盤區域
         keyboardView = KeyboardView(this).apply {
-            val heightInPx = (240 * resources.displayMetrics.density).toInt()
+            val heightInPx = (250 * resources.displayMetrics.density).toInt()
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 heightInPx
@@ -68,6 +71,9 @@ class WaiInputMethodService : InputMethodService() {
             onEnterListener = {
                 handleEnter()
             }
+            onSwitchImeListener = {
+                handleSwitchIme()
+            }
         }
         rootView.addView(keyboardView)
 
@@ -77,6 +83,7 @@ class WaiInputMethodService : InputMethodService() {
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         resetComposing()
+        keyboardView.renderKeyboard()
     }
 
     override fun onFinishInput() {
@@ -90,13 +97,13 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun handleKeyInput(key: String) {
-        if (key.length == 1 && key[0] in 'a'..'z') {
-            val state = WaiNativeEngine.feedChar(key[0])
+        if (key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
+            val state = WaiNativeEngine.feedChar(key[0].lowercaseChar())
             currentCandidates = state.candidates
             currentInputConnection?.setComposingText(state.preedit, 1)
             candidateBarView.updateState(state.preedit, currentCandidates)
         } else {
-            // 標點符號或非字母鍵
+            // 數字、標點符號或非拼音鍵
             if (currentCandidates.isNotEmpty()) {
                 commitCandidateByIndex(0)
             }
@@ -143,6 +150,21 @@ class WaiInputMethodService : InputMethodService() {
             resetComposing()
         } else {
             sendKeyChar('\n')
+        }
+    }
+
+    /**
+     * 切換至系統中其他可用的輸入法
+     */
+    private fun handleSwitchIme() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // Android 9.0+ 支援無縫切換到上一個/下一個輸入法
+            if (!switchToNextInputMethod(false)) {
+                imm.showInputMethodPicker()
+            }
+        } else {
+            imm.showInputMethodPicker()
         }
     }
 

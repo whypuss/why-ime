@@ -1,16 +1,31 @@
 package com.wai.ime.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.view.Gravity
+import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 
+enum class KeyboardMode {
+    TEXT,
+    NUMERIC,
+    SYMBOL
+}
+
 /**
- * 簡潔美觀的 26 鍵全鍵盤視圖
+ * 鍵盤視圖：支援跟手觸控響應、按鍵漣漪/高亮動畫、震動觸覺反饋、
+ * 數字鍵盤切換、符號鍵盤切換、以及一鍵切換系統其他輸入法 (Globe 🌐)
  */
 class KeyboardView(context: Context) : LinearLayout(context) {
 
@@ -18,160 +33,381 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     var onBackspaceListener: (() -> Unit)? = null
     var onSpaceListener: (() -> Unit)? = null
     var onEnterListener: (() -> Unit)? = null
+    var onSwitchImeListener: (() -> Unit)? = null
+
+    private var currentMode = KeyboardMode.TEXT
+    private var isShifted = false
+
+    private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+        vm?.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    }
 
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.parseColor("#D1D3D9"))
-        setPadding(6, 12, 6, 16)
+        setPadding(dpToPx(4), dpToPx(8), dpToPx(4), dpToPx(12))
+        renderKeyboard()
+    }
 
+    private fun triggerHaptic() {
+        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(15)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun renderKeyboard() {
+        removeAllViews()
+        when (currentMode) {
+            KeyboardMode.TEXT -> renderTextKeyboard()
+            KeyboardMode.NUMERIC -> renderNumericKeyboard()
+            KeyboardMode.SYMBOL -> renderSymbolKeyboard()
+        }
+    }
+
+    // ================= 1. 拼音/字母 鍵盤 =================
+    private fun renderTextKeyboard() {
         val row1 = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
         val row2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
         val row3 = listOf("z", "x", "c", "v", "b", "n", "m")
 
-        addView(createKeyRow(row1))
-        addView(createKeyRow(row2, sidePaddingDp = 16))
-        addView(createSpecialRow3(row3))
+        addView(createTextRow(row1))
+        addView(createTextRow(row2, sidePaddingDp = 16))
+        addView(createTextRow3(row3))
         addView(createBottomRow())
     }
 
-    private fun createKeyRow(keys: List<String>, sidePaddingDp: Int = 0): View {
+    private fun createTextRow(keys: List<String>, sidePaddingDp: Int = 0): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(dpToPx(sidePaddingDp), 4, dpToPx(sidePaddingDp), 4)
+            setPadding(dpToPx(sidePaddingDp), dpToPx(3), dpToPx(sidePaddingDp), dpToPx(3))
         }
 
         for (k in keys) {
-            val btn = createKeyButton(k).apply {
+            val label = if (isShifted) k.uppercase() else k.lowercase()
+            val btn = createKeyButton(label).apply {
                 layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                     setMargins(dpToPx(3), 0, dpToPx(3), 0)
                 }
-                setOnClickListener { onKeyClickListener?.invoke(k) }
+                setFastTouchListener {
+                    onKeyClickListener?.invoke(label)
+                }
             }
             row.addView(btn)
         }
         return row
     }
 
-    private fun createSpecialRow3(keys: List<String>): View {
+    private fun createTextRow3(keys: List<String>): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, 4, 0, 4)
+            setPadding(0, dpToPx(3), 0, dpToPx(3))
         }
 
-        // 左側 Shift (暫作裝飾/大寫切換預留)
-        val shiftBtn = createSpecialButton("⇧", weight = 1.3f).apply {
-            setOnClickListener { /* 預留大小寫切換 */ }
+        // Shift 鍵
+        val shiftLabel = if (isShifted) "⇪" else "⇧"
+        val shiftBtn = createSpecialButton(shiftLabel, weight = 1.3f).apply {
+            if (isShifted) {
+                background = createKeyBackground(Color.parseColor("#FFFFFF"), Color.parseColor("#B4B7BF"))
+                setTextColor(Color.parseColor("#007AFF"))
+            }
+            setFastTouchListener {
+                isShifted = !isShifted
+                renderKeyboard()
+            }
         }
         row.addView(shiftBtn)
 
-        // 中間 7 鍵
         for (k in keys) {
-            val btn = createKeyButton(k).apply {
+            val label = if (isShifted) k.uppercase() else k.lowercase()
+            val btn = createKeyButton(label).apply {
                 layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                     setMargins(dpToPx(3), 0, dpToPx(3), 0)
                 }
-                setOnClickListener { onKeyClickListener?.invoke(k) }
+                setFastTouchListener {
+                    onKeyClickListener?.invoke(label)
+                }
             }
             row.addView(btn)
         }
 
-        // 右側退格
+        // 退格鍵
         val delBtn = createSpecialButton("⌫", weight = 1.3f).apply {
-            setOnClickListener { onBackspaceListener?.invoke() }
+            setFastTouchListener {
+                onBackspaceListener?.invoke()
+            }
         }
         row.addView(delBtn)
 
         return row
     }
 
+    // ================= 2. 數字鍵盤 =================
+    private fun renderNumericKeyboard() {
+        val row1 = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+        val row2 = listOf("-", "/", "：", "；", "（", "）", "¥", "@", "“", "”")
+        val row3 = listOf("。", "，", "、", "？", "！", ".", "…")
+
+        addView(createKeyRowSimple(row1))
+        addView(createKeyRowSimple(row2))
+
+        val row3Layout = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            setPadding(0, dpToPx(3), 0, dpToPx(3))
+        }
+
+        // 切換到符號鍵盤
+        val symBtn = createSpecialButton("#+=", weight = 1.3f).apply {
+            setFastTouchListener {
+                currentMode = KeyboardMode.SYMBOL
+                renderKeyboard()
+            }
+        }
+        row3Layout.addView(symBtn)
+
+        for (k in row3) {
+            val btn = createKeyButton(k).apply {
+                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+                    setMargins(dpToPx(3), 0, dpToPx(3), 0)
+                }
+                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            }
+            row3Layout.addView(btn)
+        }
+
+        // 退格鍵
+        val delBtn = createSpecialButton("⌫", weight = 1.3f).apply {
+            setFastTouchListener { onBackspaceListener?.invoke() }
+        }
+        row3Layout.addView(delBtn)
+        addView(row3Layout)
+
+        addView(createBottomRow())
+    }
+
+    // ================= 3. 更多符號鍵盤 =================
+    private fun renderSymbolKeyboard() {
+        val row1 = listOf("【", "】", "{", "}", "#", "%", "^", "*", "+", "=")
+        val row2 = listOf("_", "\\", "|", "~", "<", ">", "$", "€", "￡", "•")
+        val row3 = listOf("‘", "’", "《", "》", "·", "—", ":")
+
+        addView(createKeyRowSimple(row1))
+        addView(createKeyRowSimple(row2))
+
+        val row3Layout = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            setPadding(0, dpToPx(3), 0, dpToPx(3))
+        }
+
+        // 返回 123
+        val numBtn = createSpecialButton("123", weight = 1.3f).apply {
+            setFastTouchListener {
+                currentMode = KeyboardMode.NUMERIC
+                renderKeyboard()
+            }
+        }
+        row3Layout.addView(numBtn)
+
+        for (k in row3) {
+            val btn = createKeyButton(k).apply {
+                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+                    setMargins(dpToPx(3), 0, dpToPx(3), 0)
+                }
+                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            }
+            row3Layout.addView(btn)
+        }
+
+        val delBtn = createSpecialButton("⌫", weight = 1.3f).apply {
+            setFastTouchListener { onBackspaceListener?.invoke() }
+        }
+        row3Layout.addView(delBtn)
+        addView(row3Layout)
+
+        addView(createBottomRow())
+    }
+
+    private fun createKeyRowSimple(keys: List<String>): View {
+        val row = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            setPadding(0, dpToPx(3), 0, dpToPx(3))
+        }
+
+        for (k in keys) {
+            val btn = createKeyButton(k).apply {
+                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+                    setMargins(dpToPx(3), 0, dpToPx(3), 0)
+                }
+                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            }
+            row.addView(btn)
+        }
+        return row
+    }
+
+    // ================= 底部功能行 (模式切換/切換輸入法/空格/回車) =================
     private fun createBottomRow(): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, 4, 0, 4)
+            setPadding(0, dpToPx(3), 0, dpToPx(3))
         }
 
-        val numBtn = createSpecialButton("123", weight = 1.2f)
-        row.addView(numBtn)
+        // 1. 數字/拼音切換鍵
+        val modeLabel = if (currentMode == KeyboardMode.TEXT) "123" else "中/英"
+        val modeBtn = createSpecialButton(modeLabel, weight = 1.3f).apply {
+            setFastTouchListener {
+                currentMode = if (currentMode == KeyboardMode.TEXT) KeyboardMode.NUMERIC else KeyboardMode.TEXT
+                renderKeyboard()
+            }
+        }
+        row.addView(modeBtn)
 
-        val commaBtn = createKeyButton(",").apply {
+        // 2. 切換其他輸入法鍵 (地球圖標 🌐)
+        val switchImeBtn = createSpecialButton("🌐", weight = 1.0f).apply {
+            setFastTouchListener {
+                onSwitchImeListener?.invoke()
+            }
+        }
+        row.addView(switchImeBtn)
+
+        // 3. 常用逗號
+        val commaBtn = createKeyButton("，").apply {
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
-            setOnClickListener { onKeyClickListener?.invoke(",") }
+            setFastTouchListener { onKeyClickListener?.invoke("，") }
         }
         row.addView(commaBtn)
 
-        // 空格鍵
+        // 4. 空格鍵
         val spaceBtn = Button(context).apply {
-            text = "歪"
-            textSize = 15f
+            text = "歪輸入法"
+            textSize = 14f
             setTextColor(Color.parseColor("#8E8E93"))
-            background = createKeyBackground(Color.WHITE)
+            background = createKeyBackground(Color.WHITE, Color.parseColor("#E5E5EA"))
             isAllCaps = false
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 4f).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 3.5f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
-            setOnClickListener { onSpaceListener?.invoke() }
+            setFastTouchListener { onSpaceListener?.invoke() }
         }
         row.addView(spaceBtn)
 
-        val periodBtn = createKeyButton(".").apply {
+        // 5. 常用句號
+        val periodBtn = createKeyButton("。").apply {
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
-            setOnClickListener { onKeyClickListener?.invoke(".") }
+            setFastTouchListener { onKeyClickListener?.invoke("。") }
         }
         row.addView(periodBtn)
 
-        // 回車鍵
+        // 6. 回車/換行鍵
         val enterBtn = Button(context).apply {
             text = "↵"
-            textSize = 18f
+            textSize = 20f
             setTextColor(Color.WHITE)
-            background = createKeyBackground(Color.parseColor("#007AFF"))
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.5f).apply {
+            background = createKeyBackground(Color.parseColor("#007AFF"), Color.parseColor("#0056B3"))
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.4f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
-            setOnClickListener { onEnterListener?.invoke() }
+            setFastTouchListener { onEnterListener?.invoke() }
         }
         row.addView(enterBtn)
 
         return row
     }
 
+    // ================= 輔助構造與觸覺動效 =================
+
+    /**
+     * 極致跟手的觸控監聽：手指按下的瞬間（ACTION_DOWN）立刻觸發並產生微震動與視覺反饋，
+     * 無需等待抬手延遲，同時處理抬手與滑出取消。
+     */
+    private fun View.setFastTouchListener(onTrigger: () -> Unit) {
+        setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    v.scaleX = 0.94f
+                    v.scaleY = 0.94f
+                    triggerHaptic()
+                    onTrigger()
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun createKeyButton(label: String): Button {
         return Button(context).apply {
             text = label
-            textSize = 18f
+            textSize = 19f
             setTextColor(Color.parseColor("#1C1C1E"))
-            background = createKeyBackground(Color.WHITE)
+            background = createKeyBackground(Color.WHITE, Color.parseColor("#E2E4E9"))
             isAllCaps = false
             stateListAnimator = null
+            setPadding(0, 0, 0, 0)
         }
     }
 
     private fun createSpecialButton(label: String, weight: Float): Button {
         return Button(context).apply {
             text = label
-            textSize = 16f
-            setTextColor(Color.parseColor("#3A3A3C"))
-            background = createKeyBackground(Color.parseColor("#B4B7BF"))
+            textSize = 15f
+            setTextColor(Color.parseColor("#2C2C2E"))
+            background = createKeyBackground(Color.parseColor("#B4B7BF"), Color.parseColor("#9E9FA4"))
             isAllCaps = false
             stateListAnimator = null
+            setPadding(0, 0, 0, 0)
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, weight).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
         }
     }
 
-    private fun createKeyBackground(color: Int): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dpToPx(5).toFloat()
+    private fun createKeyBackground(normalColor: Int, pressedColor: Int): RippleDrawable {
+        val normalDrawable = GradientDrawable().apply {
+            setColor(normalColor)
+            cornerRadius = dpToPx(6).toFloat()
         }
+        val pressedDrawable = GradientDrawable().apply {
+            setColor(pressedColor)
+            cornerRadius = dpToPx(6).toFloat()
+        }
+
+        val stateList = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), pressedDrawable)
+            addState(intArrayOf(), normalDrawable)
+        }
+
+        val colorStateList = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_pressed), intArrayOf()),
+            intArrayOf(pressedColor, normalColor)
+        )
+
+        return RippleDrawable(colorStateList, stateList, pressedDrawable)
     }
 
     private fun dpToPx(dp: Int): Int {
