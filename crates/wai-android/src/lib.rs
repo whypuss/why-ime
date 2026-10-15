@@ -169,6 +169,22 @@ impl WaiEngineHandle {
         self.engine.set_learning(enabled);
     }
 
+    pub fn set_target_language(&mut self, glossary_path: &str, lang_code: &str) {
+        let target_lang = lang_code.parse::<Language>().unwrap_or(Language::Japanese);
+        if !glossary_path.is_empty() {
+            // 在後台加載，避免短暫卡頓
+            let path = glossary_path.to_string();
+            match Glossary::from_path(target_lang, &path) {
+                Ok(glossary) => {
+                    self.engine.set_translator(Box::new(glossary));
+                }
+                Err(e) => {
+                    tracing::warn!("切換釋義表失敗: {e}");
+                }
+            }
+        }
+    }
+
     fn update_query(&mut self) -> EngineStateDto {
         let preedit = self.engine.raw_preedit().text;
         if preedit.is_empty() {
@@ -443,5 +459,30 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeSetLearning(
     let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
     if let Ok(mut handle) = handle_mutex.lock() {
         handle.set_learning(enabled != 0);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeSetTargetLanguage(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    glossary_path: JString,
+    lang_code: JString,
+) {
+    if ptr == 0 {
+        return;
+    }
+    let glossary_path: String = match env.get_string(&glossary_path) {
+        Ok(s) => s.into(),
+        Err(_) => return,
+    };
+    let lang_code: String = match env.get_string(&lang_code) {
+        Ok(s) => s.into(),
+        Err(_) => return,
+    };
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    if let Ok(mut handle) = handle_mutex.lock() {
+        handle.set_target_language(&glossary_path, &lang_code);
     }
 }

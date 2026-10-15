@@ -26,7 +26,8 @@ enum class KeyboardMode {
 }
 
 /**
- * 鍵盤視圖：支援跟手觸控響應、按鍵漣漪/高亮動畫、震動觸覺反饋、
+ * 鍵盤視圖：支援跟手觸控響應、按鍵微縮放動效、震動觸覺反饋、
+ * 拼音與英文切換（中英切換）、獨立逗號鍵（，）、句號鍵（。）、
  * 數字鍵盤、符號鍵盤、表情(Emoji)鍵盤、以及一鍵切換系統其他輸入法 (Globe 🌐)
  */
 class KeyboardView(context: Context) : LinearLayout(context) {
@@ -36,8 +37,15 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     var onSpaceListener: (() -> Unit)? = null
     var onEnterListener: (() -> Unit)? = null
     var onSwitchImeListener: (() -> Unit)? = null
+    var onEnglishModeToggleListener: ((Boolean) -> Unit)? = null
 
-    private var currentMode = KeyboardMode.TEXT
+    var currentMode = KeyboardMode.TEXT
+        private set
+
+    /** 是否為純英文輸入模式（中英切換） */
+    var isEnglishMode: Boolean = false
+        private set
+
     private var isShifted = false
     private val settings = SettingsRepository.getInstance(context)
 
@@ -67,6 +75,22 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 vibrator?.vibrate(15)
             }
         } catch (_: Exception) {}
+    }
+
+    fun switchMode(mode: KeyboardMode) {
+        currentMode = mode
+        renderKeyboard()
+    }
+
+    fun toggleEmojiMode() {
+        currentMode = if (currentMode == KeyboardMode.EMOJI) KeyboardMode.TEXT else KeyboardMode.EMOJI
+        renderKeyboard()
+    }
+
+    fun toggleEnglishMode() {
+        isEnglishMode = !isEnglishMode
+        onEnglishModeToggleListener?.invoke(isEnglishMode)
+        renderKeyboard()
     }
 
     fun renderKeyboard() {
@@ -298,7 +322,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         return row
     }
 
-    // ================= 底部功能行 (模式切換/切換輸入法/表情/空格/回車) =================
+    // ================= 底部功能行 (中英切換/數字切換/逗號/空格/句號/回車) =================
     private fun createBottomRow(): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -306,9 +330,9 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(3), 0, dpToPx(3))
         }
 
-        // 1. 數字/拼音切換鍵
+        // 1. 數字/拼音切換鍵 (123)
         val modeLabel = if (currentMode == KeyboardMode.TEXT) "123" else "拼音"
-        val modeBtn = createSpecialButton(modeLabel, weight = 1.3f).apply {
+        val modeBtn = createSpecialButton(modeLabel, weight = 1.1f).apply {
             setFastTouchListener {
                 currentMode = if (currentMode == KeyboardMode.TEXT) KeyboardMode.NUMERIC else KeyboardMode.TEXT
                 renderKeyboard()
@@ -316,53 +340,60 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
         row.addView(modeBtn)
 
-        // 2. 切換其他輸入法鍵 (地球圖標 🌐)
-        val switchImeBtn = createSpecialButton("🌐", weight = 1.0f).apply {
+        // 2. 中英切換鍵 (中 / 英)
+        val langModeLabel = if (isEnglishMode) "英" else "中"
+        val langModeBtn = createSpecialButton(langModeLabel, weight = 1.0f).apply {
+            if (isEnglishMode) {
+                setTextColor(Color.parseColor("#007AFF"))
+            }
             setFastTouchListener {
-                onSwitchImeListener?.invoke()
+                toggleEnglishMode()
             }
         }
-        row.addView(switchImeBtn)
+        row.addView(langModeBtn)
 
-        // 3. 表情 Emoji 切換鍵 (😀)
-        val emojiBtn = createSpecialButton("😀", weight = 1.0f).apply {
-            setFastTouchListener {
-                currentMode = if (currentMode == KeyboardMode.EMOJI) KeyboardMode.TEXT else KeyboardMode.EMOJI
-                renderKeyboard()
+        // 3. 逗號鍵 (，)
+        val commaChar = if (isEnglishMode) "," else "，"
+        val commaBtn = createKeyButton(commaChar).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.9f).apply {
+                setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
+            setFastTouchListener { onKeyClickListener?.invoke(commaChar) }
         }
-        row.addView(emojiBtn)
+        row.addView(commaBtn)
 
         // 4. 空格鍵
+        val spaceLabel = if (isEnglishMode) "English" else "歪輸入法"
         val spaceBtn = Button(context).apply {
-            text = "歪輸入法"
+            text = spaceLabel
             textSize = 14f
             setTextColor(Color.parseColor("#8E8E93"))
             background = createKeyBackground(Color.WHITE, Color.parseColor("#E5E5EA"))
             isAllCaps = false
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 3.2f).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 3.0f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
             setFastTouchListener { onSpaceListener?.invoke() }
         }
         row.addView(spaceBtn)
 
-        // 5. 常用標點 (。 或 ，)
-        val punctBtn = createKeyButton("。").apply {
+        // 5. 句號鍵 (。)
+        val periodChar = if (isEnglishMode) "." else "。"
+        val periodBtn = createKeyButton(periodChar).apply {
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.9f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
-            setFastTouchListener { onKeyClickListener?.invoke("。") }
+            setFastTouchListener { onKeyClickListener?.invoke(periodChar) }
         }
-        row.addView(punctBtn)
+        row.addView(periodBtn)
 
-        // 6. 回車/換行鍵
+        // 6. 回車/換行鍵 (↵)
         val enterBtn = Button(context).apply {
             text = "↵"
             textSize = 20f
             setTextColor(Color.WHITE)
             background = createKeyBackground(Color.parseColor("#007AFF"), Color.parseColor("#0056B3"))
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.3f).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.2f).apply {
                 setMargins(dpToPx(3), 0, dpToPx(3), 0)
             }
             setFastTouchListener { onEnterListener?.invoke() }

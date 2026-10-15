@@ -96,6 +96,17 @@ object WaiNativeEngine {
         nativeSetLearning(nativeHandle, enabled)
     }
 
+    fun setTargetLanguage(context: Context, langCode: String) {
+        if (!isInitialized || nativeHandle == 0L) return
+        try {
+            val assetName = "glossary-$langCode.tsv"
+            val file = copyAssetToFile(context, assetName, assetName)
+            nativeSetTargetLanguage(nativeHandle, file.absolutePath, langCode)
+        } catch (e: Exception) {
+            Log.e(TAG, "切換語言釋義庫失敗: $langCode", e)
+        }
+    }
+
     fun destroy() {
         if (nativeHandle != 0L) {
             nativeDestroy(nativeHandle)
@@ -128,4 +139,5 @@ object WaiNativeEngine {
     private external fun nativeSetShuangpin(ptr: Long, scheme: String)
     private external fun nativeSetTraditional(ptr: Long, variant: String)
     private external fun nativeSetLearning(ptr: Long, enabled: Boolean)
+    private external fun nativeSetTargetLanguage(ptr: Long, glossaryPath: String, langCode: String)
 }

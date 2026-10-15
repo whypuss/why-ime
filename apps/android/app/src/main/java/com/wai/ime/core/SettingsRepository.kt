@@ -57,7 +57,7 @@ class SettingsRepository private constructor(context: Context) {
     /**
      * 把所有設置同步應用到 Rust Engine 實例
      */
-    fun applyToEngine() {
+    fun applyToEngine(context: Context? = null) {
         val rules = listOf("z_zh", "c_ch", "s_sh", "n_l", "f_h", "l_r", "an_ang", "en_eng", "in_ing")
         for (r in rules) {
             WaiNativeEngine.setFuzzyRule(r, isFuzzyEnabled(r))
@@ -65,6 +65,9 @@ class SettingsRepository private constructor(context: Context) {
         WaiNativeEngine.setShuangpin(shuangpinScheme)
         WaiNativeEngine.setTraditional(traditionalVariant)
         WaiNativeEngine.setLearning(learningEnabled)
+        if (context != null) {
+            WaiNativeEngine.setTargetLanguage(context, targetLanguage)
+        }
     }
 
     companion object {

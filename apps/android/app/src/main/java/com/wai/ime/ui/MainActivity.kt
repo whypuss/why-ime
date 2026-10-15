@@ -21,6 +21,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.wai.ime.R
 import com.wai.ime.core.SettingsRepository
+import com.wai.ime.core.WaiNativeEngine
 
 class MainActivity : AppCompatActivity() {
 
@@ -150,6 +151,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun createGeneralSettingsCard(): View {
         val card = createCardLayout()
+
+        // 語言對照設定
+        val langLabels = arrayOf("日語 (日本語)", "英語 (English)", "西班牙語 (Español)", "德語 (Deutsch)", "越南語 (Tiếng Việt)")
+        val langCodes = arrayOf("ja", "en", "es", "de", "vi")
+        val currentLangIndex = langCodes.indexOf(settings.targetLanguage).coerceAtLeast(0)
+
+        card.addView(createClickableRow("對照學習語言", langLabels[currentLangIndex]) { summaryView ->
+            val checked = langCodes.indexOf(settings.targetLanguage).coerceAtLeast(0)
+            AlertDialog.Builder(this)
+                .setTitle("選擇候選詞對照學習語言")
+                .setSingleChoiceItems(langLabels, checked) { dialog, which ->
+                    val newLang = langCodes[which]
+                    settings.targetLanguage = newLang
+                    summaryView.text = langLabels[which]
+                    Thread {
+                        WaiNativeEngine.setTargetLanguage(applicationContext, newLang)
+                    }.start()
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        })
+
+        addDivider(card)
 
         // 簡繁切換
         val traditionalLabels = arrayOf("簡體中文", "繁體（台灣字形）", "繁體（香港字形）", "繁體（通用字形）")
@@ -299,7 +324,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.3-alpha (極速流暢版)\n特點：打中文即時提示日語假名讀音、翻譯釋義及詞性；整字/整詞觸發翻譯性能優化、低延遲極致跟手；支援全拼、雙拼、模糊音、簡繁轉換。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
+            text = "版本：v0.1.4-alpha (增強版)\n特點：頂部快捷欄（鍵盤切換、日/英/西/德/越語言切換、簡繁一鍵轉換、表情）；鍵盤內建逗號/句號/中英切換；極速流暢跟手。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))

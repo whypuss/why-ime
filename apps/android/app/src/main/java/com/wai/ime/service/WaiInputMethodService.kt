@@ -1,17 +1,22 @@
 package com.wai.ime.service
 
+import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import com.wai.ime.core.Candidate
 import com.wai.ime.core.SettingsRepository
 import com.wai.ime.core.WaiNativeEngine
 import com.wai.ime.ui.CandidateBarView
+import com.wai.ime.ui.KeyboardToolbarView
 import com.wai.ime.ui.KeyboardView
+import com.wai.ime.ui.MainActivity
 
 /**
  * 歪輸入法核心服務 (InputMethodService)
@@ -19,6 +24,7 @@ import com.wai.ime.ui.KeyboardView
 class WaiInputMethodService : InputMethodService() {
 
     private lateinit var rootView: LinearLayout
+    private lateinit var toolbarView: KeyboardToolbarView
     private lateinit var candidateBarView: CandidateBarView
     private lateinit var keyboardView: KeyboardView
     private lateinit var settings: SettingsRepository
@@ -32,7 +38,7 @@ class WaiInputMethodService : InputMethodService() {
         Thread {
             val ok = WaiNativeEngine.initialize(applicationContext, settings.targetLanguage)
             if (ok) {
-                settings.applyToEngine()
+                settings.applyToEngine(applicationContext)
             }
         }.start()
     }
@@ -46,7 +52,35 @@ class WaiInputMethodService : InputMethodService() {
             )
         }
 
-        // 1. 頂部雙語候選欄 (中文 + 日語釋義/假名)
+        // 1. 頂部工具欄 (功能欄目：鍵盤切換、語言切換、繁簡切換、表情、設置)
+        toolbarView = KeyboardToolbarView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            onSwitchImeClick = {
+                handleSwitchIme()
+            }
+            onLanguageClick = {
+                showLanguageSwitchDialog()
+            }
+            onTraditionalToggleClick = {
+                toggleTraditionalMode()
+            }
+            onEmojiClick = {
+                keyboardView.toggleEmojiMode()
+                toolbarView.setEmojiActive(keyboardView.currentMode == com.wai.ime.ui.KeyboardMode.EMOJI)
+            }
+            onSettingsClick = {
+                val intent = Intent(this@WaiInputMethodService, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            }
+        }
+        rootView.addView(toolbarView)
+
+        // 2. 雙語候選欄 (中文 + 外語釋義/假名)
         candidateBarView = CandidateBarView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -59,7 +93,7 @@ class WaiInputMethodService : InputMethodService() {
         }
         rootView.addView(candidateBarView)
 
-        // 2. 底部鍵盤區域
+        // 3. 底部鍵盤區域 (含逗號、句號、中英切換)
         val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
         keyboardView = KeyboardView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -81,6 +115,11 @@ class WaiInputMethodService : InputMethodService() {
             onSwitchImeListener = {
                 handleSwitchIme()
             }
+            onEnglishModeToggleListener = { isEnglish ->
+                if (isEnglish) {
+                    resetComposing()
+                }
+            }
         }
         rootView.addView(keyboardView)
 
@@ -89,8 +128,12 @@ class WaiInputMethodService : InputMethodService() {
 
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        // 每次彈出鍵盤時，刷新最新設置
-        settings.applyToEngine()
+        // 每次彈出鍵盤時，刷新最新設置與頂部欄狀態
+        settings.applyToEngine(applicationContext)
+        toolbarView.updateLanguageLabel(settings.targetLanguage)
+        toolbarView.updateTraditionalLabel(settings.traditionalVariant)
+        toolbarView.setEmojiActive(keyboardView.currentMode == com.wai.ime.ui.KeyboardMode.EMOJI)
+
         candidateBarView.candidateFontSize = settings.candidateFontSize.toFloat()
         val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
         keyboardView.layoutParams = (keyboardView.layoutParams as LinearLayout.LayoutParams).apply {
@@ -111,6 +154,12 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun handleKeyInput(key: String) {
+        // 純英文模式下，直接上屏英文字符，不走中文拼音邏輯
+        if (keyboardView.isEnglishMode) {
+            currentInputConnection?.commitText(key, 1)
+            return
+        }
+
         // 如果是單個英文字母，且非雙拼方案禁用全拼，則進入拼音/雙拼處理
         if (key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
             val state = WaiNativeEngine.feedChar(key[0].lowercaseChar())
@@ -118,7 +167,7 @@ class WaiInputMethodService : InputMethodService() {
             currentInputConnection?.setComposingText(state.preedit, 1)
             candidateBarView.updateState(state.preedit, currentCandidates)
         } else {
-            // 數字、標點符號、表情或非拼音鍵
+            // 數字、標點符號（如逗號、句號）、表情或非拼音鍵
             if (currentCandidates.isNotEmpty()) {
                 commitCandidateByIndex(0)
             }
@@ -127,6 +176,11 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun handleBackspace() {
+        if (keyboardView.isEnglishMode) {
+            currentInputConnection?.deleteSurroundingText(1, 0)
+            return
+        }
+
         val rawPreedit = WaiNativeEngine.getRawPreedit()
         if (rawPreedit.isNotEmpty()) {
             val state = WaiNativeEngine.backspace()
@@ -143,6 +197,11 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun handleSpace() {
+        if (keyboardView.isEnglishMode) {
+            currentInputConnection?.commitText(" ", 1)
+            return
+        }
+
         if (currentCandidates.isNotEmpty()) {
             // 空格選中第一個候選
             commitCandidateByIndex(0)
@@ -158,6 +217,11 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun handleEnter() {
+        if (keyboardView.isEnglishMode) {
+            sendKeyChar('\n')
+            return
+        }
+
         val raw = WaiNativeEngine.getRawPreedit()
         if (raw.isNotEmpty()) {
             // 回車將當前拼音原樣上屏
@@ -180,6 +244,71 @@ class WaiInputMethodService : InputMethodService() {
             }
         } else {
             imm.showInputMethodPicker()
+        }
+    }
+
+    /**
+     * 一鍵切換繁體/簡體
+     */
+    private fun toggleTraditionalMode() {
+        val nextVariant = if (settings.traditionalVariant == "off") "taiwan" else "off"
+        settings.traditionalVariant = nextVariant
+        settings.applyToEngine(applicationContext)
+        toolbarView.updateTraditionalLabel(nextVariant)
+
+        // 如果當前有正在輸入的拼音，刷新一次候選以即時看到簡繁變化
+        val raw = WaiNativeEngine.getRawPreedit()
+        if (raw.isNotEmpty()) {
+            val state = WaiNativeEngine.feedChar(raw.last()) // 重新觸發刷新
+            currentCandidates = state.candidates
+            candidateBarView.updateState(state.preedit, currentCandidates)
+        }
+    }
+
+    /**
+     * 頂部欄一鍵切換學習目標語言對照（日語、英語、西語、德語、越語）
+     */
+    private fun showLanguageSwitchDialog() {
+        val langs = arrayOf("ja" to "日語 (日本語)", "en" to "英語 (English)", "es" to "西班牙語 (Español)", "de" to "德語 (Deutsch)", "vi" to "越南語 (Tiếng Việt)")
+        val names = langs.map { it.second }.toTypedArray()
+        val codes = langs.map { it.first }.toTypedArray()
+        val currentIdx = codes.indexOf(settings.targetLanguage).coerceAtLeast(0)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("切換對照學習語言")
+            .setSingleChoiceItems(names, currentIdx) { d, which ->
+                val newLang = codes[which]
+                settings.targetLanguage = newLang
+                Thread {
+                    WaiNativeEngine.setTargetLanguage(applicationContext, newLang)
+                }.start()
+                toolbarView.updateLanguageLabel(newLang)
+                d.dismiss()
+            }
+            .setNegativeButton("取消", null)
+            .create()
+
+        dialog.window?.let { window ->
+            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
+            }
+            window.setType(type)
+        }
+
+        try {
+            dialog.show()
+        } catch (_: Exception) {
+            // 若無浮動視窗權限，輪轉切換到下一個語言
+            val nextIdx = (currentIdx + 1) % codes.size
+            val nextLang = codes[nextIdx]
+            settings.targetLanguage = nextLang
+            Thread {
+                WaiNativeEngine.setTargetLanguage(applicationContext, nextLang)
+            }.start()
+            toolbarView.updateLanguageLabel(nextLang)
         }
     }
 

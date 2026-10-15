@@ -17,14 +17,15 @@ data class Candidate(
     val fresh: Boolean
 ) {
     /**
-     * 格式化日語標籤文字：例 "開発する [かいはつする]" 或 "開発"
+     * 格式化外語對照標籤文字：例 "開発する [かいはつする]" 或 "develop (v.)"
      */
     fun formatJapaneseLabel(): String? {
         if (!hasTranslation || translationText == null) return null
+        val posSuffix = if (!pos.isNullOrBlank()) " ($pos)" else ""
         return if (!reading.isNullOrBlank() && reading != translationText) {
-            "$translationText [$reading]"
+            "$translationText [$reading]$posSuffix"
         } else {
-            translationText
+            "$translationText$posSuffix"
         }
     }
 
