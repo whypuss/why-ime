@@ -45,6 +45,11 @@ class SettingsRepository private constructor(context: Context) {
         get() = prefs.getBoolean("learning_enabled", true)
         set(value) = prefs.edit().putBoolean("learning_enabled", value).apply()
 
+    // 翻譯直接上屏模式（打開時直接輸出外語翻譯）
+    var outputTranslationMode: Boolean
+        get() = prefs.getBoolean("output_translation_mode", false)
+        set(value) = prefs.edit().putBoolean("output_translation_mode", value).apply()
+
     // 模糊拼音設置
     fun isFuzzyEnabled(rule: String): Boolean {
         return prefs.getBoolean("fuzzy_$rule", false)

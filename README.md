@@ -36,6 +36,7 @@
 ---
 
 - **鍵盤頂部功能欄目（快捷工具欄）**：
+  - **🎯 輸出翻譯開關**：一鍵開啟「直接輸出外語翻譯模式」，選中候選詞時直接上屏日語/英語等外語單詞（再次點擊切換回輸出中文）。
   - **🌐 換鍵盤**：一鍵快速切換至系統中已安裝的其他鍵盤/輸入法。
   - **🗣️ 語言切換**：隨時在 **日語 (ja)、英語 (en)、西班牙語 (es)、德語 (de)、越南語 (vi)** 之間即時切換學習對照辭庫。
   - **文 繁簡轉換**：頂部一鍵切換繁體中文 / 簡體中文，即時生效。
@@ -52,7 +53,7 @@
 
 你可以在 GitHub Releases 直接下載最新 APK 安裝包：
 
-👉 **[點此下載 why-ime-v0.1.4-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.4-alpha/why-ime-v0.1.4-alpha.apk)**
+👉 **[點此下載 why-ime-v0.1.5-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.5-alpha/why-ime-v0.1.5-alpha.apk)**
 
 ### 啟用步驟：
 1. 下載並安裝 APK。

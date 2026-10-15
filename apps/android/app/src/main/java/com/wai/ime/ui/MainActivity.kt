@@ -324,7 +324,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.4-alpha (增強版)\n特點：頂部快捷欄（鍵盤切換、日/英/西/德/越語言切換、簡繁一鍵轉換、表情）；鍵盤內建逗號/句號/中英切換；極速流暢跟手。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
+            text = "版本：v0.1.5-alpha (直接輸出翻譯版)\n特點：頂部快捷欄（🎯直接輸出外語翻譯、鍵盤切換、日/英/西/德/越語言切換、簡繁一鍵轉換、表情）；鍵盤內建逗號/句號/中英切換；極速流暢跟手。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))

@@ -71,6 +71,11 @@ object WaiNativeEngine {
         return nativeCommitCandidate(nativeHandle, index)
     }
 
+    fun commitTranslation(index: Int): String {
+        if (!isInitialized || nativeHandle == 0L) return ""
+        return nativeCommitTranslation(nativeHandle, index)
+    }
+
     fun getRawPreedit(): String {
         if (!isInitialized || nativeHandle == 0L) return ""
         return nativeGetRawPreedit(nativeHandle)
@@ -134,6 +139,7 @@ object WaiNativeEngine {
     private external fun nativeBackspace(ptr: Long): String
     private external fun nativeClear(ptr: Long)
     private external fun nativeCommitCandidate(ptr: Long, index: Int): String
+    private external fun nativeCommitTranslation(ptr: Long, index: Int): String
     private external fun nativeGetRawPreedit(ptr: Long): String
     private external fun nativeSetFuzzyRule(ptr: Long, ruleName: String, enabled: Boolean)
     private external fun nativeSetShuangpin(ptr: Long, scheme: String)

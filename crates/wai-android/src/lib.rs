@@ -137,6 +137,18 @@ impl WaiEngineHandle {
         Some(committed)
     }
 
+    pub fn commit_translation(&mut self, index: usize) -> Option<String> {
+        let candidate = self.last_query.as_ref().and_then(|q| {
+            q.candidates.items.get(index).cloned()
+        })?;
+
+        // 優先嘗試上屏第 1 條釋義（sense 0），若無翻譯則退回中文本身
+        let committed = self.engine.commit_translation(&candidate, 0)
+            .unwrap_or_else(|| self.engine.commit(&candidate));
+        self.last_query = None;
+        Some(committed)
+    }
+
     pub fn get_raw_preedit(&self) -> String {
         self.engine.raw_preedit().text
     }
@@ -363,6 +375,26 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCommitCandida
     };
 
     let committed = handle.commit_candidate(index as usize).unwrap_or_default();
+    env.new_string(committed).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCommitTranslation(
+    env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    index: jint,
+) -> jstring {
+    if ptr == 0 || index < 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let mut handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let committed = handle.commit_translation(index as usize).unwrap_or_default();
     env.new_string(committed).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
 }
 

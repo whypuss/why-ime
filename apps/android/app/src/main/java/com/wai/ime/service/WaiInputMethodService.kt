@@ -64,6 +64,9 @@ class WaiInputMethodService : InputMethodService() {
             onLanguageClick = {
                 showLanguageSwitchDialog()
             }
+            onOutputTranslationToggleClick = {
+                toggleOutputTranslationMode()
+            }
             onTraditionalToggleClick = {
                 toggleTraditionalMode()
             }
@@ -131,6 +134,7 @@ class WaiInputMethodService : InputMethodService() {
         // 每次彈出鍵盤時，刷新最新設置與頂部欄狀態
         settings.applyToEngine(applicationContext)
         toolbarView.updateLanguageLabel(settings.targetLanguage)
+        toolbarView.updateOutputTranslationLabel(settings.outputTranslationMode, settings.targetLanguage)
         toolbarView.updateTraditionalLabel(settings.traditionalVariant)
         toolbarView.setEmojiActive(keyboardView.currentMode == com.wai.ime.ui.KeyboardMode.EMOJI)
 
@@ -248,6 +252,15 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     /**
+     * 一鍵切換是否直接輸出外語翻譯
+     */
+    private fun toggleOutputTranslationMode() {
+        val nextMode = !settings.outputTranslationMode
+        settings.outputTranslationMode = nextMode
+        toolbarView.updateOutputTranslationLabel(nextMode, settings.targetLanguage)
+    }
+
+    /**
      * 一鍵切換繁體/簡體
      */
     private fun toggleTraditionalMode() {
@@ -283,6 +296,7 @@ class WaiInputMethodService : InputMethodService() {
                     WaiNativeEngine.setTargetLanguage(applicationContext, newLang)
                 }.start()
                 toolbarView.updateLanguageLabel(newLang)
+                toolbarView.updateOutputTranslationLabel(settings.outputTranslationMode, newLang)
                 d.dismiss()
             }
             .setNegativeButton("取消", null)
@@ -309,11 +323,17 @@ class WaiInputMethodService : InputMethodService() {
                 WaiNativeEngine.setTargetLanguage(applicationContext, nextLang)
             }.start()
             toolbarView.updateLanguageLabel(nextLang)
+            toolbarView.updateOutputTranslationLabel(settings.outputTranslationMode, nextLang)
         }
     }
 
     private fun commitCandidateByIndex(index: Int) {
-        val text = WaiNativeEngine.commitCandidate(index)
+        val text = if (settings.outputTranslationMode) {
+            val trans = WaiNativeEngine.commitTranslation(index)
+            if (trans.isNotEmpty()) trans else WaiNativeEngine.commitCandidate(index)
+        } else {
+            WaiNativeEngine.commitCandidate(index)
+        }
         if (text.isNotEmpty()) {
             currentInputConnection?.commitText(text, 1)
         }

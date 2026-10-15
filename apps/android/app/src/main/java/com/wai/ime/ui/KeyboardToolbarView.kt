@@ -18,11 +18,13 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
 
     var onSwitchImeClick: (() -> Unit)? = null
     var onLanguageClick: (() -> Unit)? = null
+    var onOutputTranslationToggleClick: (() -> Unit)? = null
     var onTraditionalToggleClick: (() -> Unit)? = null
     var onEmojiClick: (() -> Unit)? = null
     var onSettingsClick: (() -> Unit)? = null
 
     private val langBtn: TextView
+    private val outputTransBtn: TextView
     private val tradBtn: TextView
     private val emojiBtn: TextView
 
@@ -43,31 +45,37 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // 1. 鍵盤切換
+        // 1. 輸出外語翻譯開關（打開時輸出翻譯語言，關閉時輸出中文）
+        outputTransBtn = createToolbarButton("🎯 輸出: 中文") {
+            onOutputTranslationToggleClick?.invoke()
+        }
+        container.addView(outputTransBtn)
+
+        // 2. 鍵盤切換
         val switchImeBtn = createToolbarButton("🌐 換鍵盤") {
             onSwitchImeClick?.invoke()
         }
         container.addView(switchImeBtn)
 
-        // 2. 語言切換 (日 / 英 / 西 / 德 / 越)
+        // 3. 語言切換 (日 / 英 / 西 / 德 / 越)
         langBtn = createToolbarButton("🗣️ 語言: 日語") {
             onLanguageClick?.invoke()
         }
         container.addView(langBtn)
 
-        // 3. 繁體/簡體一鍵切換
+        // 4. 繁體/簡體一鍵切換
         tradBtn = createToolbarButton("文 簡") {
             onTraditionalToggleClick?.invoke()
         }
         container.addView(tradBtn)
 
-        // 4. 表情
+        // 5. 表情
         emojiBtn = createToolbarButton("😀 表情") {
             onEmojiClick?.invoke()
         }
         container.addView(emojiBtn)
 
-        // 5. 更多設定
+        // 6. 更多設定
         val settingsBtn = createToolbarButton("⚙️ 設置") {
             onSettingsClick?.invoke()
         }
@@ -87,6 +95,24 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
             else -> "日語"
         }
         langBtn.text = "🗣️ 語言: $name"
+    }
+
+    fun updateOutputTranslationLabel(isTranslateMode: Boolean, langCode: String) {
+        val name = when (langCode.lowercase()) {
+            "ja" -> "日語"
+            "en" -> "英語"
+            "es" -> "西語"
+            "de" -> "德語"
+            "vi" -> "越語"
+            else -> "外語"
+        }
+        if (isTranslateMode) {
+            outputTransBtn.text = "🎯 輸出: $name (譯)"
+            outputTransBtn.setTextColor(Color.parseColor("#007AFF"))
+        } else {
+            outputTransBtn.text = "🎯 輸出: 中文"
+            outputTransBtn.setTextColor(Color.parseColor("#3C3C43"))
+        }
     }
 
     fun updateTraditionalLabel(variant: String) {
