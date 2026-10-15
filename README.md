@@ -39,7 +39,7 @@
 
 你可以在 GitHub Releases 直接下載最新 APK 安裝包：
 
-👉 **[點此下載 why-ime-v0.1.2-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.2-alpha/why-ime-v0.1.2-alpha.apk)**
+👉 **[點此下載 why-ime-v0.1.3-alpha.apk](https://github.com/whypuss/why-ime/releases/download/v0.1.3-alpha/why-ime-v0.1.3-alpha.apk)**
 
 ### 啟用步驟：
 1. 下載並安裝 APK。

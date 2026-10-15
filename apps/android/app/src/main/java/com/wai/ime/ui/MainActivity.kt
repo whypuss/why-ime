@@ -299,7 +299,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.2-alpha\n特點：打中文即時提示日語假名讀音、翻譯釋義及詞性；支援全拼、雙拼、模糊音、簡繁轉換與極速跟手觸覺反饋。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
+            text = "版本：v0.1.3-alpha (極速流暢版)\n特點：打中文即時提示日語假名讀音、翻譯釋義及詞性；整字/整詞觸發翻譯性能優化、低延遲極致跟手；支援全拼、雙拼、模糊音、簡繁轉換。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))
@@ -307,7 +307,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoDesc)
 
         val btnGithub = createActionButton("訪問 GitHub 開源項目倉庫") {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/qingjian-team/why-ime"))
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/whypuss/why-ime"))
             startActivity(intent)
         }
         card.addView(btnGithub)

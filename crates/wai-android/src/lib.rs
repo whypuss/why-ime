@@ -182,7 +182,20 @@ impl WaiEngineHandle {
 
         match self.engine.query() {
             Ok(mut query) => {
-                let _ = self.engine.annotate(&mut query.candidates);
+                // 核心優化：只有當前輸入構成完整音節或完整詞（「輸入一個字或者一個詞」）時才進行翻譯
+                // 若輸入為殘缺字母或中間聲母（如 k、kaif、zh、s…），不進行翻譯標註，以保證輸入極致流暢跟手
+                let is_complete = query.tail.is_empty()
+                    && query.segmentations.first().map_or(false, |s| {
+                        !s.last_is_partial() && s.incomplete_count() == 0
+                    });
+
+                // 移動端候選欄最多展示前 25 個候選，截斷避免對 500 個候選全量查詢與巨大 JSON 傳輸
+                query.candidates.items.truncate(25);
+
+                if is_complete {
+                    let _ = self.engine.annotate(&mut query.candidates);
+                }
+
                 let candidates = query
                     .candidates
                     .items
