@@ -174,7 +174,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         for ((primary, hint) in keysWithHint) {
             val mainLabel = if (isShifted) primary.uppercase() else primary.lowercase()
@@ -199,7 +199,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         // 左右兩端 0.5f 留白，確保 A~L 鍵寬度與 Q~P 完全一致且整體居中
         val leftSpacer = View(context).apply {
@@ -236,7 +236,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         // Shift 鍵
         val shiftLabel = if (isShifted) "⇪" else "⇧"
@@ -290,7 +290,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         val symBtn = createSpecialButton("#+=", weight = 1.4f).apply {
             setFastTouchListener {
@@ -334,7 +334,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         val numBtn = createSpecialButton("123", weight = 1.4f).apply {
             setFastTouchListener {
@@ -378,7 +378,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         for (k in row3) {
             val btn = createKeyButton(k).apply {
@@ -406,7 +406,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         for (k in keys) {
             val btn = createKeyButton(k).apply {
@@ -428,7 +428,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             setPadding(0, dpToPx(2), 0, dpToPx(2))
         }
 
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
 
         // 1. 符號鍵 (符)
         val symBtn = createSpecialButton("符", weight = 1.05f).apply {
@@ -793,8 +793,16 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
     }
 
+    /**
+     * 按鍵間距（水平外邊距）：
+     * 預設為 2.2dp，按鍵間距增加 0.3mm (~1.9dp)，即單側增加 ~0.95dp -> 3.15dp。
+     * 兩鍵之間間隙增加 0.3mm，徹底防誤觸。
+     */
+    private val keyMarginHorizontal: Int
+        get() = ((2.2f + mmToDp(0.15f)) * context.resources.displayMetrics.density).toInt()
+
     private fun createSpecialButton(label: String, weight: Float): Button {
-        val marginH = (2.2f * context.resources.displayMetrics.density).toInt()
+        val marginH = keyMarginHorizontal
         return Button(context).apply {
             text = label
             textSize = 15f
