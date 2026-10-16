@@ -79,6 +79,23 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
     }
 
     /**
+     * 主線程即時刷新拼音顯示（0ms 零延遲反饋，不等待後台候選詞查詢）
+     */
+    fun updatePreeditOnly(preedit: String) {
+        lastPreedit = preedit
+        if (preedit.isNotBlank()) {
+            if (preeditView.visibility != View.VISIBLE) {
+                preeditView.visibility = View.VISIBLE
+            }
+            if (preeditView.text != preedit) {
+                preeditView.text = preedit
+            }
+        } else {
+            preeditView.visibility = View.GONE
+        }
+    }
+
+    /**
      * 更新候選條狀態（採用 ViewHolder 複用，零 GC 延遲極速刷新）
      */
     fun updateState(preedit: String, candidates: List<Candidate>) {

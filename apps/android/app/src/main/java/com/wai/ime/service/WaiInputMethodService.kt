@@ -112,6 +112,9 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             onKeyClickListener = { key ->
                 handleKeyInput(key)
             }
+            onKeyLongPressReplaceListener = { originalKey, replacementKey ->
+                handleKeyLongPressReplace(originalKey, replacementKey)
+            }
             onBackspaceListener = {
                 handleBackspace()
             }
@@ -235,7 +238,12 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             localPreedit += ch
             val t1 = System.nanoTime()
 
-            // 2. 主線程立即調用 setComposingText 刷新輸入框，無須等待後台查詢（T1 -> T2）
+            // 候選條頂部預編輯區立即刷新顯示拼音（0ms 零延遲反饋給用戶）
+            if (::candidateBarView.isInitialized) {
+                candidateBarView.updatePreeditOnly(localPreedit)
+            }
+
+            // 2. 主線程調用 setComposingText 刷新輸入框（T1 -> T2）
             currentInputConnection?.setComposingText(localPreedit, 1)
             val t2 = System.nanoTime()
 
@@ -260,6 +268,40 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
                 commitCandidateByIndex(0)
             }
             currentInputConnection?.commitText(key, 1)
+        }
+    }
+
+    /**
+     * 當按鍵被長按超過 350ms 時觸發，將剛才 ACTION_DOWN 輸入的字母替換為右上角副字符 (數字/標點)
+     */
+    private fun handleKeyLongPressReplace(originalKey: String, replacementKey: String) {
+        if (keyboardView.isEnglishMode) {
+            currentInputConnection?.deleteSurroundingText(1, 0)
+            currentInputConnection?.commitText(replacementKey, 1)
+            return
+        }
+
+        if (originalKey.length == 1 && originalKey[0].lowercaseChar() in 'a'..'z') {
+            if (localPreedit.endsWith(originalKey.lowercase())) {
+                localPreedit = localPreedit.dropLast(1)
+                dispatcher.enqueueBackspace()
+                if (localPreedit.isNotEmpty()) {
+                    currentInputConnection?.setComposingText(localPreedit, 1)
+                    if (::candidateBarView.isInitialized) {
+                        candidateBarView.updatePreeditOnly(localPreedit)
+                    }
+                } else {
+                    currentInputConnection?.commitText("", 1)
+                    currentCandidates = emptyList()
+                    if (::candidateBarView.isInitialized) {
+                        candidateBarView.updateState("", emptyList())
+                    }
+                }
+            }
+            currentInputConnection?.commitText(replacementKey, 1)
+        } else {
+            currentInputConnection?.deleteSurroundingText(1, 0)
+            currentInputConnection?.commitText(replacementKey, 1)
         }
     }
 

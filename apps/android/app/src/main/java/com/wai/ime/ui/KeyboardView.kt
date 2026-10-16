@@ -45,6 +45,7 @@ enum class KeyboardMode {
 class KeyboardView(context: Context) : LinearLayout(context) {
 
     var onKeyClickListener: ((String) -> Unit)? = null
+    var onKeyLongPressReplaceListener: ((String, String) -> Unit)? = null
     var onBackspaceListener: (() -> Unit)? = null
     var onSpaceListener: (() -> Unit)? = null
     var onEnterListener: (() -> Unit)? = null
@@ -184,7 +185,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 }
                 setKeyTouchWithLongPress(
                     onTap = { onKeyClickListener?.invoke(mainLabel) },
-                    onLongPress = { onKeyClickListener?.invoke(hint) }
+                    onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
                 )
             }
             row.addView(keyView)
@@ -215,7 +216,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 }
                 setKeyTouchWithLongPress(
                     onTap = { onKeyClickListener?.invoke(mainLabel) },
-                    onLongPress = { onKeyClickListener?.invoke(hint) }
+                    onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
                 )
             }
             row.addView(keyView)
@@ -260,7 +261,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 }
                 setKeyTouchWithLongPress(
                     onTap = { onKeyClickListener?.invoke(mainLabel) },
-                    onLongPress = { onKeyClickListener?.invoke(hint) }
+                    onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
                 )
             }
             row.addView(keyView)
@@ -463,7 +464,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             }
             setKeyTouchWithLongPress(
                 onTap = { onKeyClickListener?.invoke(commaChar) },
-                onLongPress = { onKeyClickListener?.invoke("'") }
+                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(commaChar, "'") }
             )
         }
         row.addView(commaKey)
@@ -493,7 +494,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             }
             setKeyTouchWithLongPress(
                 onTap = { onKeyClickListener?.invoke(periodChar) },
-                onLongPress = { onKeyClickListener?.invoke("?") }
+                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(periodChar, "?") }
             )
         }
         row.addView(periodKey)
@@ -663,9 +664,15 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     }
 
     /**
-     * 支援短按上屏主字符、長按上屏副標字符 (數字/符號) 的觸控監聽
+     * 支援短按上屏主字符、長按上屏副標字符 (數字/符號) 的觸控監聽：
+     * 1. ACTION_DOWN 時立即出字並震動反饋（0ms 零感知延遲，跟手極速）；
+     * 2. 若長按達到 350ms，自動將剛才輸入的主字符替換為右上角副字符；
+     * 3. 徹底消滅等抬手（ACTION_UP）造成的 80ms~150ms 嚴重遲滯！
      */
-    private fun View.setKeyTouchWithLongPress(onTap: () -> Unit, onLongPress: () -> Unit) {
+    private fun View.setKeyTouchWithLongPress(
+        onTap: () -> Unit,
+        onLongPressReplace: () -> Unit
+    ) {
         var isLongPressed = false
         val longPressRunnable = Runnable {
             isLongPressed = true
@@ -674,7 +681,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 scaleX = 1.05f
                 scaleY = 1.05f
             }
-            onLongPress()
+            onLongPressReplace()
         }
 
         setOnTouchListener { v, event ->
@@ -686,6 +693,11 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                         v.scaleX = 0.94f
                         v.scaleY = 0.94f
                     }
+                    // 核心關鍵優化：按下瞬間立即震動 + 立即出字！
+                    triggerHaptic()
+                    onTap()
+
+                    // 排程長按替換：如果按住不放超過 350ms，則替換為副字符
                     handler.postDelayed(longPressRunnable, 350)
                     true
                 }
@@ -693,11 +705,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                     v.isPressed = false
                     handler.removeCallbacks(longPressRunnable)
                     if (settings.keyAnimation) {
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
-                    }
-                    if (!isLongPressed) {
-                        triggerHaptic()
-                        onTap()
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(60).start()
                     }
                     true
                 }
@@ -705,7 +713,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                     v.isPressed = false
                     handler.removeCallbacks(longPressRunnable)
                     if (settings.keyAnimation) {
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(60).start()
                     }
                     true
                 }
