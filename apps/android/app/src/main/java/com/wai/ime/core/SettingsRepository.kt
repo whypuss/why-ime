@@ -31,7 +31,7 @@ class SettingsRepository private constructor(context: Context) {
         set(value) = prefs.edit().putInt("candidate_font_size", value).apply()
 
     var keyboardHeightDp: Int
-        get() = prefs.getInt("keyboard_height_dp", 255) // 230 (矮), 255 (標準/長度增加0.5mm最適), 280 (大屏/高鍵盤)
+        get() = prefs.getInt("keyboard_height_dp", 270) // 240 (矮), 270 (標準/適配行距+1mm), 295 (大屏/高鍵盤)
         set(value) = prefs.edit().putInt("keyboard_height_dp", value).apply()
 
     // 語言與學習目標 (目前支援日語 "ja")

@@ -164,7 +164,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -189,7 +189,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -226,7 +226,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -280,7 +280,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row3Layout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -324,7 +324,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row3Layout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -368,7 +368,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row3Layout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -396,7 +396,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -418,7 +418,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, dpToPx(2), 0, dpToPx(2))
+            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
         }
 
         val marginH = keyMarginHorizontal
@@ -800,6 +800,15 @@ class KeyboardView(context: Context) : LinearLayout(context) {
      */
     private val keyMarginHorizontal: Int
         get() = ((2.2f + mmToDp(0.15f)) * context.resources.displayMetrics.density).toInt()
+
+    /**
+     * 鍵盤行距（垂直上下間距）：
+     * 原始上下內邊距為 2.0dp（相鄰兩行按鍵間隙為 4.0dp）。
+     * 行距增加 1 毫米（1mm ≈ 6.3dp），即上下各增加 0.5mm (~3.15dp) -> 5.15dp。
+     * 相鄰行按鍵之間的垂直間隙由 4.0dp 增至 10.3dp，精確增加 1.0mm，防止上下行盲打誤觸。
+     */
+    private val rowPaddingVertical: Int
+        get() = ((2.0f + mmToDp(0.5f)) * context.resources.displayMetrics.density).toInt()
 
     private fun createSpecialButton(label: String, weight: Float): Button {
         val marginH = keyMarginHorizontal

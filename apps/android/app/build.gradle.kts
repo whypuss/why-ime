@@ -11,8 +11,8 @@ android {
         applicationId = "com.wai.ime"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.1.14-alpha"
+        versionCode = 15
+        versionName = "0.1.15-alpha"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "x86_64"))

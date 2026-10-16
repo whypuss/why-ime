@@ -287,8 +287,8 @@ class MainActivity : AppCompatActivity() {
         addDivider(card)
 
         // 鍵盤高度
-        val heightLabels = arrayOf("矮鍵盤 (230dp)", "標準/適配 (255dp)", "高鍵盤 (280dp)")
-        val heights = arrayOf(230, 255, 280)
+        val heightLabels = arrayOf("矮鍵盤 (240dp)", "標準/適配行距 (270dp)", "高鍵盤 (295dp)")
+        val heights = arrayOf(240, 270, 295)
         val currentHeightIndex = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
 
         card.addView(createClickableRow("鍵盤高度調節", heightLabels[currentHeightIndex]) { summaryView ->
