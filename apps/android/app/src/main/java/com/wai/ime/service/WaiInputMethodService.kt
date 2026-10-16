@@ -5,12 +5,17 @@ import android.content.Context
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.os.Build
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import com.wai.ime.core.Candidate
+import com.wai.ime.core.CandidateResult
+import com.wai.ime.core.CommitResult
+import com.wai.ime.core.EngineDispatcher
+import com.wai.ime.core.EngineDispatcherListener
 import com.wai.ime.core.SettingsRepository
 import com.wai.ime.core.WaiNativeEngine
 import com.wai.ime.ui.CandidateBarView
@@ -20,20 +25,24 @@ import com.wai.ime.ui.MainActivity
 
 /**
  * 歪輸入法核心服務 (InputMethodService)
+ * 實現 P0 架構解耦：主線程即時反饋拼音，Worker 單執行緒嚴格保序執行與查詢合併
  */
-class WaiInputMethodService : InputMethodService() {
+class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
     private lateinit var rootView: LinearLayout
     private lateinit var toolbarView: KeyboardToolbarView
     private lateinit var candidateBarView: CandidateBarView
     private lateinit var keyboardView: KeyboardView
     private lateinit var settings: SettingsRepository
+    private lateinit var dispatcher: EngineDispatcher
 
     private var currentCandidates: List<Candidate> = emptyList()
+    private var localPreedit: String = ""
 
     override fun onCreate() {
         super.onCreate()
         settings = SettingsRepository.getInstance(applicationContext)
+        dispatcher = EngineDispatcher(this)
         // 異步在後台初始化 Rust 辭典，避免阻塞啟動主線程
         Thread {
             val ok = WaiNativeEngine.initialize(applicationContext, settings.targetLanguage)
@@ -162,7 +171,52 @@ class WaiInputMethodService : InputMethodService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::dispatcher.isInitialized) {
+            dispatcher.destroy()
+        }
         WaiNativeEngine.destroy()
+    }
+
+    override fun onCandidatesUpdated(result: CandidateResult) {
+        // 嚴格版本與 session 隔離：舊 session 或過期請求直接丟棄
+        if (!::dispatcher.isInitialized || result.sessionId != dispatcher.currentSessionId) {
+            return
+        }
+        if (result.requestId < dispatcher.latestDeliveredRequestId) {
+            return
+        }
+        dispatcher.latestDeliveredRequestId = result.requestId
+
+        if (localPreedit.isEmpty()) {
+            currentCandidates = emptyList()
+            if (::candidateBarView.isInitialized) {
+                candidateBarView.updateState("", emptyList())
+            }
+        } else {
+            currentCandidates = result.candidates
+            if (::candidateBarView.isInitialized) {
+                candidateBarView.updateState(result.preedit.ifEmpty { localPreedit }, currentCandidates)
+            }
+        }
+    }
+
+    override fun onCommitResult(result: CommitResult) {
+        if (result.sessionId != dispatcher.currentSessionId) {
+            return
+        }
+        if (result.success && result.committedText.isNotEmpty()) {
+            currentInputConnection?.commitText(result.committedText, 1)
+            localPreedit = result.remainingPreedit
+            if (localPreedit.isEmpty()) {
+                currentCandidates = emptyList()
+                if (::candidateBarView.isInitialized) {
+                    candidateBarView.updateState("", emptyList())
+                }
+                currentInputConnection?.finishComposingText()
+            } else {
+                currentInputConnection?.setComposingText(localPreedit, 1)
+            }
+        }
     }
 
     private fun handleKeyInput(key: String) {
@@ -172,15 +226,37 @@ class WaiInputMethodService : InputMethodService() {
             return
         }
 
-        // 如果是單個英文字母，且非雙拼方案禁用全拼，則進入拼音/雙拼處理
+        // 單個英文字母，進入拼音/雙拼處理
         if (key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
-            val state = WaiNativeEngine.feedChar(key[0].lowercaseChar())
-            currentCandidates = state.candidates
-            currentInputConnection?.setComposingText(state.preedit, 1)
-            candidateBarView.updateState(state.preedit, currentCandidates)
+            val t0 = System.nanoTime()
+            val ch = key[0].lowercaseChar()
+
+            // 1. 本地立即更新拼音狀態（T0 -> T1，< 0.1ms）
+            localPreedit += ch
+            val t1 = System.nanoTime()
+
+            // 2. 主線程立即調用 setComposingText 刷新輸入框，無須等待後台查詢（T1 -> T2）
+            currentInputConnection?.setComposingText(localPreedit, 1)
+            val t2 = System.nanoTime()
+
+            // 3. 異步送入單執行緒 Worker 佇列，嚴格保序執行，自動合併過期查詢
+            dispatcher.enqueuePush(ch)
+            val t3 = System.nanoTime()
+
+            val localMs = (t1 - t0) / 1_000_000.0
+            val ipcMs = (t2 - t1) / 1_000_000.0
+            val enqueueMs = (t3 - t2) / 1_000_000.0
+            val mainTotalMs = (t3 - t0) / 1_000_000.0
+
+            Log.i(
+                "WAI_PERF",
+                "[MAIN_THREAD] key='$ch' | localPreedit=${String.format("%.2f", localMs)}ms, " +
+                "IPC(setComposing)=${String.format("%.2f", ipcMs)}ms, " +
+                "enqueue=${String.format("%.2f", enqueueMs)}ms | MainTotal=${String.format("%.2f", mainTotalMs)}ms"
+            )
         } else {
             // 數字、標點符號（如逗號、句號）、表情或非拼音鍵
-            if (currentCandidates.isNotEmpty()) {
+            if (localPreedit.isNotEmpty() && currentCandidates.isNotEmpty()) {
                 commitCandidateByIndex(0)
             }
             currentInputConnection?.commitText(key, 1)
@@ -193,16 +269,16 @@ class WaiInputMethodService : InputMethodService() {
             return
         }
 
-        val rawPreedit = WaiNativeEngine.getRawPreedit()
-        if (rawPreedit.isNotEmpty()) {
-            val state = WaiNativeEngine.backspace()
-            currentCandidates = state.candidates
-            if (state.preedit.isNotEmpty()) {
-                currentInputConnection?.setComposingText(state.preedit, 1)
+        if (localPreedit.isNotEmpty()) {
+            localPreedit = localPreedit.dropLast(1)
+            if (localPreedit.isNotEmpty()) {
+                currentInputConnection?.setComposingText(localPreedit, 1)
             } else {
                 currentInputConnection?.commitText("", 1)
+                currentCandidates = emptyList()
+                candidateBarView.updateState("", emptyList())
             }
-            candidateBarView.updateState(state.preedit, currentCandidates)
+            dispatcher.enqueueBackspace()
         } else {
             currentInputConnection?.deleteSurroundingText(1, 0)
         }
@@ -218,9 +294,9 @@ class WaiInputMethodService : InputMethodService() {
             // 空格選中第一個候選
             commitCandidateByIndex(0)
         } else {
-            val raw = WaiNativeEngine.getRawPreedit()
-            if (raw.isNotEmpty()) {
-                currentInputConnection?.commitText(raw, 1)
+            if (localPreedit.isNotEmpty()) {
+                // 無候選時空格上屏原始拼音
+                currentInputConnection?.commitText(localPreedit, 1)
                 resetComposing()
             } else {
                 currentInputConnection?.commitText(" ", 1)
@@ -234,10 +310,9 @@ class WaiInputMethodService : InputMethodService() {
             return
         }
 
-        val raw = WaiNativeEngine.getRawPreedit()
-        if (raw.isNotEmpty()) {
+        if (localPreedit.isNotEmpty()) {
             // 回車將當前拼音原樣上屏
-            currentInputConnection?.commitText(raw, 1)
+            currentInputConnection?.commitText(localPreedit, 1)
             resetComposing()
         } else {
             sendKeyChar('\n')
@@ -285,12 +360,13 @@ class WaiInputMethodService : InputMethodService() {
         settings.applyToEngine(applicationContext)
         toolbarView.updateTraditionalLabel(nextVariant)
 
-        // 如果當前有正在輸入的拼音，刷新一次候選以即時看到簡繁變化
-        val raw = WaiNativeEngine.getRawPreedit()
-        if (raw.isNotEmpty()) {
-            val state = WaiNativeEngine.feedChar(raw.last()) // 重新觸發刷新
-            currentCandidates = state.candidates
-            candidateBarView.updateState(state.preedit, currentCandidates)
+        // 如果當前有正在輸入的拼音，刷新候選
+        if (localPreedit.isNotEmpty()) {
+            val chars = localPreedit.toCharArray()
+            dispatcher.newSession()
+            for (c in chars) {
+                dispatcher.enqueuePush(c)
+            }
         }
     }
 
@@ -352,22 +428,24 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     private fun commitCandidateByIndex(index: Int) {
-        val text = if (settings.outputTranslationMode) {
-            val trans = WaiNativeEngine.commitTranslation(index)
-            if (trans.isNotEmpty()) trans else WaiNativeEngine.commitCandidate(index)
-        } else {
-            WaiNativeEngine.commitCandidate(index)
+        if (index in currentCandidates.indices) {
+            val cand = currentCandidates[index]
+            dispatcher.enqueueCommit(index, cand.text, settings.outputTranslationMode)
+        } else if (localPreedit.isNotEmpty()) {
+            currentInputConnection?.commitText(localPreedit, 1)
+            resetComposing()
         }
-        if (text.isNotEmpty()) {
-            currentInputConnection?.commitText(text, 1)
-        }
-        resetComposing()
     }
 
     private fun resetComposing() {
-        WaiNativeEngine.clear()
+        localPreedit = ""
         currentCandidates = emptyList()
-        candidateBarView.updateState("", emptyList())
+        if (::candidateBarView.isInitialized) {
+            candidateBarView.updateState("", emptyList())
+        }
         currentInputConnection?.finishComposingText()
+        if (::dispatcher.isInitialized) {
+            dispatcher.enqueueClear()
+        }
     }
 }

@@ -16,6 +16,22 @@ use qingjian_dictionary::Dictionary;
 use qingjian_translate::Glossary;
 use serde::Serialize;
 
+#[cfg(target_os = "android")]
+unsafe extern "C" {
+    fn __android_log_write(prio: std::os::raw::c_int, tag: *const std::os::raw::c_char, text: *const std::os::raw::c_char) -> std::os::raw::c_int;
+}
+
+#[cfg(not(target_os = "android"))]
+unsafe fn __android_log_write(_prio: std::os::raw::c_int, _tag: *const std::os::raw::c_char, _text: *const std::os::raw::c_char) -> std::os::raw::c_int {
+    0
+}
+
+unsafe fn android_log_write(prio: std::os::raw::c_int, tag: *const std::os::raw::c_char, text: *const std::os::raw::c_char) {
+    unsafe {
+        __android_log_write(prio, tag, text);
+    }
+}
+
 /// 傳遞給 Android 端的候選詞資訊（包含中文與外語釋義/假名）。
 #[derive(Debug, Clone, Serialize)]
 pub struct CandidateDto {
@@ -114,6 +130,54 @@ impl WaiEngineHandle {
             candidates: Vec::new(),
             is_composing: false,
         }
+    }
+
+    pub fn push_char(&mut self, ch: char) -> String {
+        self.engine.push(ch);
+        self.engine.raw_preedit().text
+    }
+
+    pub fn backspace_fast(&mut self) -> String {
+        self.engine.backspace();
+        self.engine.raw_preedit().text
+    }
+
+    pub fn clear_fast(&mut self) {
+        self.engine.clear();
+        self.last_query = None;
+    }
+
+    pub fn query_candidates(&mut self) -> EngineStateDto {
+        self.update_query()
+    }
+
+    pub fn commit_candidate_verified(&mut self, index: usize, expected_text: &str) -> Option<String> {
+        let candidate = self.last_query.as_ref().and_then(|q| {
+            q.candidates.items.get(index).cloned()
+        })?;
+
+        if !expected_text.is_empty() && candidate.text != expected_text {
+            return None;
+        }
+
+        let committed = self.engine.commit(&candidate);
+        self.last_query = None;
+        Some(committed)
+    }
+
+    pub fn commit_translation_verified(&mut self, index: usize, expected_text: &str) -> Option<String> {
+        let candidate = self.last_query.as_ref().and_then(|q| {
+            q.candidates.items.get(index).cloned()
+        })?;
+
+        if !expected_text.is_empty() && candidate.text != expected_text {
+            return None;
+        }
+
+        let committed = self.engine.commit_translation(&candidate, 0)
+            .unwrap_or_else(|| self.engine.commit(&candidate));
+        self.last_query = None;
+        Some(committed)
     }
 
     pub fn commit_candidate(&mut self, index: usize) -> Option<String> {
@@ -304,8 +368,65 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeFeedChar(
     };
 
     if let Some(c) = char::from_u32(ch as u32) {
-        let state = handle.input_char(c);
+        let t_start = std::time::Instant::now();
+        handle.engine.push(c);
+        let t_push = t_start.elapsed();
+
+        let t_query_start = std::time::Instant::now();
+        let preedit = handle.engine.raw_preedit().text;
+        let (candidates_dtos, t_query, t_annot) = if preedit.is_empty() {
+            handle.last_query = None;
+            (Vec::new(), std::time::Duration::ZERO, std::time::Duration::ZERO)
+        } else {
+            match handle.engine.query() {
+                Ok(mut query) => {
+                    let t_q = t_query_start.elapsed();
+                    let is_complete = query.tail.is_empty()
+                        && query.segmentations.first().map_or(false, |s| {
+                            !s.last_is_partial() && s.incomplete_count() == 0
+                        });
+                    query.candidates.items.truncate(25);
+                    let t_annot_start = std::time::Instant::now();
+                    if is_complete {
+                        let _ = handle.engine.annotate(&mut query.candidates);
+                    }
+                    let t_a = t_annot_start.elapsed();
+                    let dtos: Vec<CandidateDto> = query.candidates.items.iter().map(CandidateDto::from).collect();
+                    handle.last_query = Some(query);
+                    (dtos, t_q, t_a)
+                }
+                Err(_) => {
+                    handle.last_query = None;
+                    (Vec::new(), t_query_start.elapsed(), std::time::Duration::ZERO)
+                }
+            }
+        };
+
+        let t_json_start = std::time::Instant::now();
+        let state = EngineStateDto {
+            preedit,
+            candidates: candidates_dtos,
+            is_composing: !handle.engine.raw_preedit().text.is_empty(),
+        };
         let json = serde_json::to_string(&state).unwrap_or_default();
+        let t_json = t_json_start.elapsed();
+
+        // 輸出 Rust 底層基準數據到 logcat
+        let log_msg = format!(
+            "[RUST_BENCH] char='{}' | push={:.2}ms, query={:.2}ms, annot={:.2}ms, json={:.2}ms | Total={:.2}ms",
+            c,
+            t_push.as_secs_f64() * 1000.0,
+            t_query.as_secs_f64() * 1000.0,
+            t_annot.as_secs_f64() * 1000.0,
+            t_json.as_secs_f64() * 1000.0,
+            t_start.elapsed().as_secs_f64() * 1000.0,
+        );
+        let tag = std::ffi::CString::new("WaiNativeEngine").unwrap();
+        let msg = std::ffi::CString::new(log_msg).unwrap();
+        unsafe {
+            android_log_write(3, tag.as_ptr(), msg.as_ptr());
+        }
+
         return env.new_string(json).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw();
     }
 
@@ -384,6 +505,136 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCommitTransla
     };
 
     let committed = handle.commit_translation(index as usize).unwrap_or_default();
+    env.new_string(committed).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativePushChar(
+    env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    ch: jint,
+) -> jstring {
+    if ptr == 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let mut handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let raw = if let Some(c) = char::from_u32(ch as u32) {
+        handle.push_char(c)
+    } else {
+        handle.get_raw_preedit()
+    };
+    env.new_string(raw).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeBackspaceFast(
+    env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) -> jstring {
+    if ptr == 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let mut handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let raw = handle.backspace_fast();
+    env.new_string(raw).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeClearFast(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) {
+    if ptr == 0 {
+        return;
+    }
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    if let Ok(mut handle) = handle_mutex.lock() {
+        handle.clear_fast();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeQuery(
+    env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) -> jstring {
+    if ptr == 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let mut handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let state = handle.query_candidates();
+    let json = serde_json::to_string(&state).unwrap_or_default();
+    env.new_string(json).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCommitCandidateVerified(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    index: jint,
+    expected_text: JString,
+) -> jstring {
+    if ptr == 0 || index < 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let expected: String = match env.get_string(&expected_text) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let mut handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let committed = handle.commit_candidate_verified(index as usize, &expected).unwrap_or_default();
+    env.new_string(committed).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCommitTranslationVerified(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    index: jint,
+    expected_text: JString,
+) -> jstring {
+    if ptr == 0 || index < 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let expected: String = match env.get_string(&expected_text) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let mut handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let committed = handle.commit_translation_verified(index as usize, &expected).unwrap_or_default();
     env.new_string(committed).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
 }
 

@@ -49,10 +49,26 @@ object WaiNativeEngine {
         }
     }
 
-    fun feedChar(ch: Char): EngineState {
-        if (!isInitialized || nativeHandle == 0L) return EngineState("", emptyList(), false)
+    data class TimedEngineResult(
+        val state: EngineState,
+        val tJniReturnedNanos: Long,
+        val tParseDoneNanos: Long
+    )
+
+    fun feedCharTimed(ch: Char): TimedEngineResult {
+        if (!isInitialized || nativeHandle == 0L) {
+            val now = System.nanoTime()
+            return TimedEngineResult(EngineState("", emptyList(), false), now, now)
+        }
         val json = nativeFeedChar(nativeHandle, ch.code)
-        return EngineState.fromJson(json)
+        val tJniReturned = System.nanoTime()
+        val state = EngineState.fromJson(json)
+        val tParseDone = System.nanoTime()
+        return TimedEngineResult(state, tJniReturned, tParseDone)
+    }
+
+    fun feedChar(ch: Char): EngineState {
+        return feedCharTimed(ch).state
     }
 
     fun backspace(): EngineState {
@@ -74,6 +90,38 @@ object WaiNativeEngine {
     fun commitTranslation(index: Int): String {
         if (!isInitialized || nativeHandle == 0L) return ""
         return nativeCommitTranslation(nativeHandle, index)
+    }
+
+    // ================= P0 解耦專用方法 =================
+    fun pushChar(ch: Char): String {
+        if (!isInitialized || nativeHandle == 0L) return ""
+        return nativePushChar(nativeHandle, ch.code)
+    }
+
+    fun backspaceFast(): String {
+        if (!isInitialized || nativeHandle == 0L) return ""
+        return nativeBackspaceFast(nativeHandle)
+    }
+
+    fun clearFast() {
+        if (!isInitialized || nativeHandle == 0L) return
+        nativeClearFast(nativeHandle)
+    }
+
+    fun queryCandidates(): EngineState {
+        if (!isInitialized || nativeHandle == 0L) return EngineState("", emptyList(), false)
+        val json = nativeQuery(nativeHandle)
+        return EngineState.fromJson(json)
+    }
+
+    fun commitCandidateVerified(index: Int, expectedText: String): String {
+        if (!isInitialized || nativeHandle == 0L) return ""
+        return nativeCommitCandidateVerified(nativeHandle, index, expectedText)
+    }
+
+    fun commitTranslationVerified(index: Int, expectedText: String): String {
+        if (!isInitialized || nativeHandle == 0L) return ""
+        return nativeCommitTranslationVerified(nativeHandle, index, expectedText)
     }
 
     fun getRawPreedit(): String {
@@ -140,6 +188,12 @@ object WaiNativeEngine {
     private external fun nativeClear(ptr: Long)
     private external fun nativeCommitCandidate(ptr: Long, index: Int): String
     private external fun nativeCommitTranslation(ptr: Long, index: Int): String
+    private external fun nativePushChar(ptr: Long, ch: Int): String
+    private external fun nativeBackspaceFast(ptr: Long): String
+    private external fun nativeClearFast(ptr: Long)
+    private external fun nativeQuery(ptr: Long): String
+    private external fun nativeCommitCandidateVerified(ptr: Long, index: Int, expectedText: String): String
+    private external fun nativeCommitTranslationVerified(ptr: Long, index: Int, expectedText: String): String
     private external fun nativeGetRawPreedit(ptr: Long): String
     private external fun nativeSetFuzzyRule(ptr: Long, ruleName: String, enabled: Boolean)
     private external fun nativeSetShuangpin(ptr: Long, scheme: String)

@@ -31,6 +31,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         settings = SettingsRepository.getInstance(this)
 
+        // 啟動基準量測測試（同時對比同步基準與 P0 解耦排程器）
+        Thread {
+            WaiNativeEngine.initialize(applicationContext, "ja")
+            Thread.sleep(800)
+            runBenchmarkSuite()
+            Thread.sleep(500)
+            runP0DecoupledBenchmark()
+        }.start()
+
         val scrollView = ScrollView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -142,6 +151,13 @@ class MainActivity : AppCompatActivity() {
                 setColor(Color.parseColor("#F2F2F7"))
                 cornerRadius = dpToPx(8).toFloat()
                 setStroke(dpToPx(1), Color.parseColor("#E5E5EA"))
+            }
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener {
+                requestFocus()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(this, InputMethodManager.SHOW_FORCED)
             }
         }
         card.addView(editText)
@@ -520,6 +536,148 @@ class MainActivity : AppCompatActivity() {
             )
         }
         container.addView(divider)
+    }
+
+    private fun runBenchmarkSuite() {
+        val testWords = listOf("kaifa", "riben", "xuexi", "macauprice")
+        android.util.Log.i("WAI_BENCH", "==================== [基準性能測試開始] ====================")
+
+        // 暖機
+        WaiNativeEngine.clear()
+        for (c in "test") { WaiNativeEngine.feedCharTimed(c) }
+        WaiNativeEngine.clear()
+
+        val latencies = mutableListOf<Double>()
+        for (word in testWords) {
+            WaiNativeEngine.clear()
+            android.util.Log.i("WAI_BENCH", "--- 測試詞: $word ---")
+            for (ch in word) {
+                val tStart = System.nanoTime()
+                val res = WaiNativeEngine.feedCharTimed(ch)
+                val tEnd = System.nanoTime()
+                val totalMs = (tEnd - tStart) / 1_000_000.0
+                val jniMs = (res.tJniReturnedNanos - tStart) / 1_000_000.0
+                val jsonMs = (res.tParseDoneNanos - res.tJniReturnedNanos) / 1_000_000.0
+                latencies.add(totalMs)
+                android.util.Log.i(
+                    "WAI_BENCH",
+                    "  按鍵 '$ch' -> 總耗時=${String.format("%.2f", totalMs)}ms (JNI+Rust=${String.format("%.2f", jniMs)}ms, JSON解析=${String.format("%.2f", jsonMs)}ms, 候選數=${res.state.candidates.size})"
+                )
+            }
+        }
+        latencies.sort()
+        val p50 = latencies[latencies.size * 50 / 100]
+        val p95 = latencies[latencies.size * 95 / 100]
+        val p99 = latencies[latencies.size * 99 / 100]
+        android.util.Log.i("WAI_BENCH", "==================== [基準統計] ====================")
+        android.util.Log.i("WAI_BENCH", "總樣本數: ${latencies.size}")
+        android.util.Log.i("WAI_BENCH", "P50: ${String.format("%.2f", p50)}ms | P95: ${String.format("%.2f", p95)}ms | P99: ${String.format("%.2f", p99)}ms")
+        android.util.Log.i("WAI_BENCH", "==================== [基準性能測試結束] ====================")
+    }
+
+    private fun runP0DecoupledBenchmark() {
+        val testWords = listOf("kaifa", "riben", "xuexi", "macauprice")
+        android.util.Log.i("WAI_BENCH_P0", "==================== [P0 解耦排程器測試開始] ====================")
+
+        val mainLatencies = mutableListOf<Double>()
+        var lastCandidates = listOf<com.wai.ime.core.Candidate>()
+        var lastCommitResult: com.wai.ime.core.CommitResult? = null
+
+        val dispatcher = com.wai.ime.core.EngineDispatcher(object : com.wai.ime.core.EngineDispatcherListener {
+            override fun onCandidatesUpdated(result: com.wai.ime.core.CandidateResult) {
+                lastCandidates = result.candidates
+            }
+
+            override fun onCommitResult(result: com.wai.ime.core.CommitResult) {
+                lastCommitResult = result
+            }
+        })
+
+        Thread {
+            // 階段 1：常規連打測試（模擬 25ms 擊鍵間隔）
+            for (word in testWords) {
+                dispatcher.newSession()
+                android.util.Log.i("WAI_BENCH_P0", "--- 常規連打測試詞: $word ---")
+                for (ch in word) {
+                    val t0 = System.nanoTime()
+                    dispatcher.enqueuePush(ch)
+                    val t1 = System.nanoTime()
+                    mainLatencies.add((t1 - t0) / 1_000_000.0)
+                    Thread.sleep(25)
+                }
+                Thread.sleep(120)
+                android.util.Log.i(
+                    "WAI_BENCH_P0",
+                    "詞 $word 最終候選數: ${lastCandidates.size}, 首候選=${lastCandidates.firstOrNull()?.text}"
+                )
+            }
+
+            // 階段 2：極速連打壓力測試（模擬 5ms 超高頻擊鍵，測試過期查詢合併效果）
+            android.util.Log.i("WAI_BENCH_P0", "--- 極速壓力測試 (5ms 極限連打長句) ---")
+            val stressSentence = "kaifazhexuexiriben"
+            dispatcher.newSession()
+            for (ch in stressSentence) {
+                val t0 = System.nanoTime()
+                dispatcher.enqueuePush(ch)
+                val t1 = System.nanoTime()
+                mainLatencies.add((t1 - t0) / 1_000_000.0)
+                Thread.sleep(5) // 5ms 極限高頻
+            }
+            Thread.sleep(150)
+            android.util.Log.i(
+                "WAI_BENCH_P0",
+                "長句連打完成，最終候選數: ${lastCandidates.size}, 首候選=${lastCandidates.firstOrNull()?.text}"
+            )
+
+            // 階段 3：驗證候選版本隔離與提交校驗
+            android.util.Log.i("WAI_BENCH_P0", "--- 候選詞提交與版本隔離測試 ---")
+            // 3.1 正常提交正確候選
+            val cand0 = lastCandidates.firstOrNull()
+            if (cand0 != null) {
+                dispatcher.enqueueCommit(0, cand0.text, false)
+                Thread.sleep(80)
+                android.util.Log.i(
+                    "WAI_BENCH_P0",
+                    "提交有效候選 '${cand0.text}': 成功=${lastCommitResult?.success}, 上屏='${lastCommitResult?.committedText}', 剩餘='${lastCommitResult?.remainingPreedit}'"
+                )
+            }
+
+            // 3.2 提交過期/篡改的候選詞（版本不匹配防禦）
+            dispatcher.newSession()
+            for (ch in "kaifa") { dispatcher.enqueuePush(ch) }
+            Thread.sleep(80)
+            // 刻意傳入錯誤的 expectedText 模擬版本偏移或按鍵競爭
+            dispatcher.enqueueCommit(0, "不存在的詞彙_WRONG", false)
+            Thread.sleep(80)
+            android.util.Log.i(
+                "WAI_BENCH_P0",
+                "提交不匹配候選防禦結果: 成功=${lastCommitResult?.success} (預期應為 false 拒絕上屏)"
+            )
+
+            mainLatencies.sort()
+            val p50 = mainLatencies[mainLatencies.size * 50 / 100]
+            val p95 = mainLatencies[mainLatencies.size * 95 / 100]
+            val p99 = mainLatencies[mainLatencies.size * 99 / 100]
+
+            val totalKeys = dispatcher.totalKeyCount.get()
+            val executed = dispatcher.executedQueryCount.get()
+            val coalesced = dispatcher.coalescedQueryCount.get()
+            val coalescedRate = if (totalKeys > 0) (coalesced.toDouble() / totalKeys.toDouble()) * 100 else 0.0
+
+            android.util.Log.i("WAI_BENCH_P0", "==================== [P0 解耦排程統計] ====================")
+            android.util.Log.i("WAI_BENCH_P0", "總輸入按鍵數: $totalKeys")
+            android.util.Log.i("WAI_BENCH_P0", "實際執行查詢數: $executed")
+            android.util.Log.i(
+                "WAI_BENCH_P0",
+                "合併/跳過的過期查詢數: $coalesced (${String.format("%.1f", coalescedRate)}%)"
+            )
+            android.util.Log.i(
+                "WAI_BENCH_P0",
+                "主線程按鍵延遲 P50: ${String.format("%.3f", p50)}ms | P95: ${String.format("%.3f", p95)}ms | P99: ${String.format("%.3f", p99)}ms"
+            )
+            android.util.Log.i("WAI_BENCH_P0", "==================== [P0 解耦排程器測試結束] ====================")
+            dispatcher.destroy()
+        }.start()
     }
 
     private fun dpToPx(dp: Int): Int {
