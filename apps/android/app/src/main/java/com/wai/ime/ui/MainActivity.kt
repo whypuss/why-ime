@@ -257,8 +257,8 @@ class MainActivity : AppCompatActivity() {
         addDivider(card)
 
         // 鍵盤高度
-        val heightLabels = arrayOf("矮鍵盤 (225dp)", "標準鍵盤 (255dp)", "高鍵盤 (285dp)")
-        val heights = arrayOf(225, 255, 285)
+        val heightLabels = arrayOf("矮鍵盤 (215dp)", "標準/摺疊屏適配 (235dp)", "高鍵盤 (260dp)")
+        val heights = arrayOf(215, 235, 260)
         val currentHeightIndex = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
 
         card.addView(createClickableRow("鍵盤高度調節", heightLabels[currentHeightIndex]) { summaryView ->
@@ -332,7 +332,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.6-alpha (連刪與符號按鍵版)\n特點：\n1. 字母鍵上標數字與符號（長按直接上屏），鍵距加大防誤觸；\n2. 退格鍵支援長按高速連刪；\n3. 新增韓語 (한국어)、葡萄牙語 (Português) 離線對照與直接翻譯；\n4. 修復 vivo 等定製系統軟鍵盤無法彈出的相容性問題；\n5. 極速流暢跟手，離線全本機運行，零隱私上傳。"
+            text = "版本：v0.1.7-alpha (OPPO Find N2 摺疊屏適配版)\n特點：\n1. 專門針對 OPPO Find N2 摺疊屏/大屏深度優化尺寸與鍵位佈局（對齊百度輸入法規格）；\n2. 頂部工具欄全面換用灰白色極簡高級質感設計，無彩色符號干擾；\n3. 底部功能鍵對齊主流鍵盤：[符] [123] [,] [空格] [。] [中/英] [确定]；\n4. 26 鍵雙層鍵位（字母居中 + 右上角數字/符號角標，長按直出）；\n5. 長按退格鍵持續高速連刪（每秒 20 字）；\n6. 支援日、英、西、德、越、韓、葡 7 國語言即時離線對照與直接翻譯；\n7. 修復 vivo、OPPO 等定製 ROM 鍵盤召喚相容性問題。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))

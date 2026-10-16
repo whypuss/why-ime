@@ -12,7 +12,8 @@ import android.widget.TextView
 
 /**
  * 鍵盤頂部功能欄目（Toolbar）：
- * 包含：鍵盤切換、語言切換、繁體簡體切換、表情(Emoji)、設置快捷入口
+ * 乾淨極簡的灰白色系商務設計，無多餘彩色 Emoji 符號，
+ * 包含：輸出模式、切換鍵盤、語言切換、繁簡切換、表情、設置。
  */
 class KeyboardToolbarView(context: Context) : LinearLayout(context) {
 
@@ -30,8 +31,8 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = HORIZONTAL
-        setBackgroundColor(Color.parseColor("#E5E7EB"))
-        setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
+        setBackgroundColor(Color.parseColor("#EEF0F3"))
+        setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3))
         gravity = Gravity.CENTER_VERTICAL
 
         val scrollView = HorizontalScrollView(context).apply {
@@ -46,37 +47,37 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
         }
 
         // 1. 輸出外語翻譯開關（打開時輸出翻譯語言，關閉時輸出中文）
-        outputTransBtn = createToolbarButton("🎯 輸出: 中文") {
+        outputTransBtn = createToolbarButton("輸出: 中文") {
             onOutputTranslationToggleClick?.invoke()
         }
         container.addView(outputTransBtn)
 
         // 2. 鍵盤切換
-        val switchImeBtn = createToolbarButton("🌐 換鍵盤") {
+        val switchImeBtn = createToolbarButton("切換鍵盤") {
             onSwitchImeClick?.invoke()
         }
         container.addView(switchImeBtn)
 
-        // 3. 語言切換 (日 / 英 / 西 / 德 / 越)
-        langBtn = createToolbarButton("🗣️ 語言: 日語") {
+        // 3. 語言切換
+        langBtn = createToolbarButton("語言: 日語") {
             onLanguageClick?.invoke()
         }
         container.addView(langBtn)
 
         // 4. 繁體/簡體一鍵切換
-        tradBtn = createToolbarButton("文 簡") {
+        tradBtn = createToolbarButton("繁/簡") {
             onTraditionalToggleClick?.invoke()
         }
         container.addView(tradBtn)
 
         // 5. 表情
-        emojiBtn = createToolbarButton("😀 表情") {
+        emojiBtn = createToolbarButton("表情") {
             onEmojiClick?.invoke()
         }
         container.addView(emojiBtn)
 
         // 6. 更多設定
-        val settingsBtn = createToolbarButton("⚙️ 設置") {
+        val settingsBtn = createToolbarButton("設置") {
             onSettingsClick?.invoke()
         }
         container.addView(settingsBtn)
@@ -96,7 +97,7 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
             "pt" -> "葡語"
             else -> "日語"
         }
-        langBtn.text = "🗣️ 語言: $name"
+        langBtn.text = "語言: $name"
     }
 
     fun updateOutputTranslationLabel(isTranslateMode: Boolean, langCode: String) {
@@ -111,35 +112,39 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
             else -> "外語"
         }
         if (isTranslateMode) {
-            outputTransBtn.text = "🎯 輸出: $name (譯)"
+            outputTransBtn.text = "輸出: $name(譯)"
             outputTransBtn.setTextColor(Color.parseColor("#007AFF"))
+            outputTransBtn.typeface = Typeface.DEFAULT_BOLD
         } else {
-            outputTransBtn.text = "🎯 輸出: 中文"
-            outputTransBtn.setTextColor(Color.parseColor("#3C3C43"))
+            outputTransBtn.text = "輸出: 中文"
+            outputTransBtn.setTextColor(Color.parseColor("#4A4C52"))
+            outputTransBtn.typeface = Typeface.DEFAULT
         }
     }
 
     fun updateTraditionalLabel(variant: String) {
         val isTrad = variant != "off"
-        tradBtn.text = if (isTrad) "文 繁體" else "文 簡體"
-        tradBtn.setTextColor(if (isTrad) Color.parseColor("#007AFF") else Color.parseColor("#3C3C43"))
+        tradBtn.text = if (isTrad) "繁體" else "簡體"
+        tradBtn.setTextColor(if (isTrad) Color.parseColor("#007AFF") else Color.parseColor("#4A4C52"))
+        tradBtn.typeface = if (isTrad) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
     }
 
     fun setEmojiActive(active: Boolean) {
-        emojiBtn.setTextColor(if (active) Color.parseColor("#007AFF") else Color.parseColor("#3C3C43"))
+        emojiBtn.setTextColor(if (active) Color.parseColor("#007AFF") else Color.parseColor("#4A4C52"))
+        emojiBtn.typeface = if (active) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
     }
 
     private fun createToolbarButton(title: String, onClick: () -> Unit): TextView {
         return TextView(context).apply {
             text = title
-            textSize = 12.5f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.parseColor("#3C3C43"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT
+            setTextColor(Color.parseColor("#4A4C52"))
             gravity = Gravity.CENTER
-            setPadding(dpToPx(10), dpToPx(5), dpToPx(10), dpToPx(5))
+            setPadding(dpToPx(11), dpToPx(4), dpToPx(11), dpToPx(4))
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
-                cornerRadius = dpToPx(14).toFloat()
+                cornerRadius = dpToPx(8).toFloat()
             }
             layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
                 setMargins(dpToPx(3), dpToPx(2), dpToPx(3), dpToPx(2))
