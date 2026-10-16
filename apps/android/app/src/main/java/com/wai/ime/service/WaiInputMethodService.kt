@@ -164,7 +164,10 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             height = heightInPx
         }
         resetComposing()
-        keyboardView.renderKeyboard()
+        // 關鍵防閃爍修復：只有全新彈出鍵盤時才完整重構鍵盤；如果是輸入過程中的 restarting 回調，絕對不可重建！
+        if (!restarting) {
+            keyboardView.renderKeyboard()
+        }
     }
 
     override fun onFinishInput() {

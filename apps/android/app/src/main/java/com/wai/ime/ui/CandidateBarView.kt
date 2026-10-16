@@ -44,13 +44,14 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         setBackgroundColor(Color.parseColor("#F5F5F7"))
         setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
 
-        // 頂部拼音顯示
+        // 頂部拼音顯示（固定佔位高度，使用 INVISIBLE 避免切換時高度劇烈跳變引發鍵盤晃動閃爍）
         preeditView = TextView(context).apply {
             textSize = 13f
             setTextColor(Color.parseColor("#007AFF"))
             typeface = Typeface.DEFAULT_BOLD
-            visibility = View.GONE
+            visibility = View.INVISIBLE
             setPadding(dpToPx(8), dpToPx(2), dpToPx(8), dpToPx(2))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(22))
         }
         addView(preeditView)
 
@@ -91,7 +92,8 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
                 preeditView.text = preedit
             }
         } else {
-            preeditView.visibility = View.GONE
+            preeditView.text = ""
+            preeditView.visibility = View.INVISIBLE
         }
     }
 
@@ -106,7 +108,8 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             preeditView.text = preedit
             preeditView.visibility = View.VISIBLE
         } else {
-            preeditView.visibility = View.GONE
+            preeditView.text = ""
+            preeditView.visibility = View.INVISIBLE
         }
 
         val count = candidates.size
