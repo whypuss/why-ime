@@ -17,6 +17,7 @@ import com.wai.ime.core.CommitResult
 import com.wai.ime.core.EngineDispatcher
 import com.wai.ime.core.EngineDispatcherListener
 import com.wai.ime.core.SettingsRepository
+import com.wai.ime.core.VibrationHelper
 import com.wai.ime.core.WaiNativeEngine
 import com.wai.ime.ui.CandidateBarView
 import com.wai.ime.ui.KeyboardToolbarView
@@ -474,6 +475,8 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
     private fun commitCandidateByIndex(index: Int) {
         if (index in currentCandidates.indices) {
+            // 空格或按鍵選中候選詞時，同樣觸發選詞震動反饋
+            VibrationHelper.vibrate(this, candidateBarView, settings, isCandidateSelect = true)
             val cand = currentCandidates[index]
             dispatcher.enqueueCommit(index, cand.text, settings.outputTranslationMode)
         } else if (localPreedit.isNotEmpty()) {

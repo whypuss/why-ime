@@ -10,6 +10,8 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.wai.ime.core.Candidate
+import com.wai.ime.core.SettingsRepository
+import com.wai.ime.core.VibrationHelper
 
 /**
  * 候選詞條視圖（展示拼音、候選字、以及即時對照的日語假名和釋義）
@@ -26,6 +28,8 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             field = value
             refreshCurrentViews()
         }
+
+    private val settings = SettingsRepository.getInstance(context)
 
     private var lastPreedit: String = ""
     private var lastCandidates: List<Candidate> = emptyList()
@@ -144,6 +148,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             }
 
             vh.root.setOnClickListener {
+                VibrationHelper.vibrate(context, vh.root, settings, isCandidateSelect = true)
                 onCandidateClickListener?.invoke(i)
             }
         }

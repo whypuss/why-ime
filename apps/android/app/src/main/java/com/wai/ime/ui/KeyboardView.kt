@@ -23,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.wai.ime.core.SettingsRepository
+import com.wai.ime.core.VibrationHelper
 
 enum class KeyboardMode {
     TEXT,
@@ -97,16 +98,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     }
 
     private fun triggerHaptic() {
-        if (!settings.keyVibration) return
-        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(15, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(15)
-            }
-        } catch (_: Exception) {}
+        VibrationHelper.vibrate(context, this, settings, isCandidateSelect = false)
     }
 
     fun switchMode(mode: KeyboardMode) {

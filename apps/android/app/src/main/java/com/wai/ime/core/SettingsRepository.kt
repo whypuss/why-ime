@@ -15,6 +15,13 @@ class SettingsRepository private constructor(context: Context) {
         get() = prefs.getBoolean("key_vibration", true)
         set(value) = prefs.edit().putBoolean("key_vibration", value).apply()
 
+    /**
+     * 震動強度百分比 (0 - 100)，預設 70%，提供充沛有力的觸覺反饋
+     */
+    var vibrationStrength: Int
+        get() = prefs.getInt("vibration_strength", 70)
+        set(value) = prefs.edit().putInt("vibration_strength", value.coerceIn(0, 100)).apply()
+
     var keyAnimation: Boolean
         get() = prefs.getBoolean("key_animation", true)
         set(value) = prefs.edit().putBoolean("key_animation", value).apply()

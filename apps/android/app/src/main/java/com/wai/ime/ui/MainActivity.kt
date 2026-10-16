@@ -16,11 +16,13 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.wai.ime.R
 import com.wai.ime.core.SettingsRepository
+import com.wai.ime.core.VibrationHelper
 import com.wai.ime.core.WaiNativeEngine
 
 class MainActivity : AppCompatActivity() {
@@ -238,9 +240,21 @@ class MainActivity : AppCompatActivity() {
     private fun createKeyboardInterfaceCard(): View {
         val card = createCardLayout()
 
-        // 按鍵震動
-        card.addView(createSwitchRow("按鍵震動反饋", "敲擊按鍵時提供即時震動跟手反饋", settings.keyVibration) { isChecked ->
+        // 按鍵與選詞震動開關
+        card.addView(createSwitchRow("按鍵與選詞震動反饋", "敲擊按鍵及選中候選詞時提供即時震動跟手反饋", settings.keyVibration) { isChecked ->
             settings.keyVibration = isChecked
+            if (isChecked) {
+                VibrationHelper.vibrate(this, null, settings, isCandidateSelect = false)
+            }
+        })
+
+        addDivider(card)
+
+        // 震動強度滑桿調節 (0 - 100%)
+        card.addView(createSeekBarRow("震動強度調節", settings.vibrationStrength) { strength ->
+            settings.vibrationStrength = strength
+            // 滑動時即時觸發一次該強度的震動體驗
+            VibrationHelper.vibrate(this, null, settings, isCandidateSelect = false)
         })
 
         addDivider(card)
@@ -348,7 +362,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.13-alpha (防閃爍 & 零延遲極速跟手版)\n特點：\n1. 徹底消滅鍵盤閃爍：修復 IME 重複回調导致整個鍵盤全量重繪的 bug，候選欄固定高度佔位，杜絕晃動閃爍；\n2. 核心延遲歸零：字母鍵全面切換為 ACTION_DOWN 觸控即刻出字與震動反饋（0ms 零感知延遲），徹底消滅手指抬起（ACTION_UP）造成的 100ms+ 黏滯遲滯感！長按 350ms 自動無感替換為副字符；\n3. 預編輯拼音 0ms 刷新：候選條頂部拼音隨手指落下即時顯示，主線程完全不等待任何後台候選詞運算；\n4. 按鍵間距微調：鍵與鍵之間的水平間距增加 0.3mm，徹底消除快速盲打時手指相鄰鍵誤觸；\n5. 鍵位尺寸適配：按鍵長度（高度）增加 0.5mm，單鍵寬度微調減少 0.5mm，符合人體工學；\n6. P0 核心優化：按鍵輸入與候選詞計算完全解耦，主執行緒延遲降至 0.05ms，解決連續快速打字卡頓；\n7. 智慧查詢合併：連續極速連打自動合併過期無效運算，50ms 延遲上限防飢餓；\n8. 三重版本隔離：sessionId、requestId 與候選詞文字精確比對，杜絕錯位提交；\n9. 針對 OPPO Find N2 摺疊屏/大屏深度優化：兩側自適應留白收攏鍵位，縮小單鍵寬度，消除按鍵過大導致的誤觸；\n10. 鍵盤底端新增獨立導航欄：左側地球圖標（短按無縫輪換、長按呼出系統輸入法選擇菜單），右側一鍵收起鍵盤；\n11. 頂部工具欄全面換用灰白色極簡高級設計，無多餘符號干擾；\n12. 底部功能行：[符] [123] [,] [空格] [。] [中/英] [确定]；\n13. 26 鍵雙層鍵位（字母居中 + 右上角數字/符號角標，長按直出）；\n14. 長按退格鍵持續高速連刪（每秒 20 字）；\n15. 支援日、英、西、德、越、韓、葡 7 國語言離線對照與直接翻譯；\n16. 本地零隱私上傳，vivo、OPPO 等定製 ROM 召喚無阻。"
+            text = "版本：v0.1.14-alpha (自定義震動強度 & 候選選詞震感反饋版)\n特點：\n1. 震動強度可調節滑桿：設置中心新增 0-100% 震動強度即時調節滑桿，拖動時即時反饋震感，徹底解決震動偏弱問題；\n2. 候選詞選取震動：點擊雙語候選條上屏或空格上屏時，提供有力、清脆的確認級觸覺反饋；\n3. 徹底消滅鍵盤閃爍：修復 IME 重複回調导致整個鍵盤全量重繪的 bug，候選欄固定高度佔位，杜絕晃動閃爍；\n4. 核心延遲歸零：字母鍵全面切換為 ACTION_DOWN 觸控即刻出字與震動反饋（0ms 零感知延遲），徹底消滅手指抬起（ACTION_UP）造成的 100ms+ 黏滯遲滯感！長按 350ms 自動無感替換為副字符；\n5. 預編輯拼音 0ms 刷新：候選條頂部拼音隨手指落下即時顯示，主線程完全不等待任何後台候選詞運算；\n6. 按鍵間距微調：鍵與鍵之間的水平間距增加 0.3mm，徹底消除快速盲打時手指相鄰鍵誤觸；\n7. 鍵位尺寸適配：按鍵長度（高度）增加 0.5mm，單鍵寬度微調減少 0.5mm，符合人體工學；\n8. P0 核心優化：按鍵輸入與候選詞計算完全解耦，主執行緒延遲降至 0.05ms，解決連續快速打字卡頓；\n9. 智慧查詢合併：連續極速連打自動合併過期無效運算，50ms 延遲上限防飢餓；\n10. 三重版本隔離：sessionId、requestId 與候選詞文字精確比對，杜絕錯位提交；\n11. 針對 OPPO Find N2 摺疊屏/大屏深度優化：兩側自適應留白收攏鍵位，縮小單鍵寬度，消除按鍵過大導致的誤觸；\n12. 鍵盤底端新增獨立導航欄：左側地球圖標（短按無縫輪換、長按呼出系統輸入法選擇菜單），右側一鍵收起鍵盤；\n13. 頂部工具欄全面換用灰白色極簡高級設計，無多餘符號干擾；\n14. 底部功能行：[符] [123] [,] [空格] [。] [中/英] [确定]；\n15. 26 鍵雙層鍵位（字母居中 + 右上角數字/符號角標，長按直出）；\n16. 長按退格鍵持續高速連刪（每秒 20 字）；\n17. 支援日、英、西、德、越、韓、葡 7 國語言離線對照與直接翻譯；\n18. 本地零隱私上傳，vivo、OPPO 等定製 ROM 召喚無阻。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))
@@ -482,6 +496,58 @@ class MainActivity : AppCompatActivity() {
         row.addView(textLayout)
         row.addView(switch)
         return row
+    }
+
+    private fun createSeekBarRow(
+        title: String,
+        initialProgress: Int,
+        onProgressChange: (Int) -> Unit
+    ): View {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dpToPx(10), 0, dpToPx(10))
+        }
+
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val titleView = TextView(this).apply {
+            text = title
+            textSize = 15f
+            setTextColor(Color.parseColor("#1C1C1E"))
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        headerLayout.addView(titleView)
+
+        val valueView = TextView(this).apply {
+            text = "$initialProgress%"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#007AFF"))
+        }
+        headerLayout.addView(valueView)
+        container.addView(headerLayout)
+
+        val seekBar = SeekBar(this).apply {
+            max = 100
+            progress = initialProgress
+            setPadding(0, dpToPx(8), 0, dpToPx(4))
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                    valueView.text = "$progress%"
+                    if (fromUser) {
+                        onProgressChange(progress)
+                    }
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
+            })
+        }
+        container.addView(seekBar)
+
+        return container
     }
 
     private fun createClickableRow(
