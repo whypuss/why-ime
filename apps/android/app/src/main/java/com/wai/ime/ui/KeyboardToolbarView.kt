@@ -92,6 +92,8 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
             "es" -> "西語"
             "de" -> "德語"
             "vi" -> "越語"
+            "ko" -> "韓語"
+            "pt" -> "葡語"
             else -> "日語"
         }
         langBtn.text = "🗣️ 語言: $name"
@@ -104,6 +106,8 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
             "es" -> "西語"
             "de" -> "德語"
             "vi" -> "越語"
+            "ko" -> "韓語"
+            "pt" -> "葡語"
             else -> "外語"
         }
         if (isTranslateMode) {

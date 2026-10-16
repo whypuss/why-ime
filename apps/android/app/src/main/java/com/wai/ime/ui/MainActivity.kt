@@ -153,8 +153,16 @@ class MainActivity : AppCompatActivity() {
         val card = createCardLayout()
 
         // 語言對照設定
-        val langLabels = arrayOf("日語 (日本語)", "英語 (English)", "西班牙語 (Español)", "德語 (Deutsch)", "越南語 (Tiếng Việt)")
-        val langCodes = arrayOf("ja", "en", "es", "de", "vi")
+        val langLabels = arrayOf(
+            "日語 (日本語)",
+            "英語 (English)",
+            "西班牙語 (Español)",
+            "德語 (Deutsch)",
+            "越南語 (Tiếng Việt)",
+            "韓語 (한국어)",
+            "葡萄牙語 (Português)"
+        )
+        val langCodes = arrayOf("ja", "en", "es", "de", "vi", "ko", "pt")
         val currentLangIndex = langCodes.indexOf(settings.targetLanguage).coerceAtLeast(0)
 
         card.addView(createClickableRow("對照學習語言", langLabels[currentLangIndex]) { summaryView ->
@@ -324,7 +332,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.5-alpha (直接輸出翻譯版)\n特點：頂部快捷欄（🎯直接輸出外語翻譯、鍵盤切換、日/英/西/德/越語言切換、簡繁一鍵轉換、表情）；鍵盤內建逗號/句號/中英切換；極速流暢跟手。\n離線詞庫與翻譯全本機運行，保護隱私零上傳。"
+            text = "版本：v0.1.6-alpha (連刪與符號按鍵版)\n特點：\n1. 字母鍵上標數字與符號（長按直接上屏），鍵距加大防誤觸；\n2. 退格鍵支援長按高速連刪；\n3. 新增韓語 (한국어)、葡萄牙語 (Português) 離線對照與直接翻譯；\n4. 修復 vivo 等定製系統軟鍵盤無法彈出的相容性問題；\n5. 極速流暢跟手，離線全本機運行，零隱私上傳。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))

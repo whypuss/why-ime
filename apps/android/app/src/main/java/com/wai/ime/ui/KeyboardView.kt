@@ -3,19 +3,24 @@ package com.wai.ime.ui
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.TextView
 import com.wai.ime.core.SettingsRepository
 
 enum class KeyboardMode {
@@ -27,6 +32,7 @@ enum class KeyboardMode {
 
 /**
  * 鍵盤視圖：支援跟手觸控響應、按鍵微縮放動效、震動觸覺反饋、
+ * 字母上標數字/符號（長按快速輸入）、長按退格鍵持續連續刪除、
  * 拼音與英文切換（中英切換）、獨立逗號鍵（，）、句號鍵（。）、
  * 數字鍵盤、符號鍵盤、表情(Emoji)鍵盤、以及一鍵切換系統其他輸入法 (Globe 🌐)
  */
@@ -49,6 +55,8 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     private var isShifted = false
     private val settings = SettingsRepository.getInstance(context)
 
+    private val handler = Handler(Looper.getMainLooper())
+
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
         vm?.defaultVibrator
@@ -60,7 +68,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.parseColor("#D1D3D9"))
-        setPadding(dpToPx(4), dpToPx(6), dpToPx(4), dpToPx(10))
+        setPadding(dpToPx(4), dpToPx(5), dpToPx(4), dpToPx(8))
         renderKeyboard()
     }
 
@@ -103,41 +111,58 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
     }
 
-    // ================= 1. 拼音/字母 鍵盤 =================
+    // ================= 1. 拼音/字母 鍵盤 (百度/標準雙層按鍵 + 長按副符號) =================
     private fun renderTextKeyboard() {
-        val row1 = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
-        val row2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
-        val row3 = listOf("z", "x", "c", "v", "b", "n", "m")
+        // 第一行：字母 + 數字 1~0
+        val row1 = listOf(
+            "q" to "1", "w" to "2", "e" to "3", "r" to "4", "t" to "5",
+            "y" to "6", "u" to "7", "i" to "8", "o" to "9", "p" to "0"
+        )
+        // 第二行：字母 + 常用標點
+        val row2 = listOf(
+            "a" to "~", "s" to "!", "d" to "@", "f" to "#", "g" to "%",
+            "h" to "\"", "j" to "'", "k" to "*", "l" to "?"
+        )
+        // 第三行：字母 + 括號標點
+        val row3 = listOf(
+            "z" to "(", "x" to ")", "c" to "-", "v" to "_",
+            "b" to ":", "n" to ";", "m" to "/"
+        )
 
-        addView(createTextRow(row1))
-        addView(createTextRow(row2, sidePaddingDp = 16))
+        addView(createCompositeTextRow(row1))
+        addView(createCompositeTextRow(row2, sidePaddingDp = 14))
         addView(createTextRow3(row3))
         addView(createBottomRow())
     }
 
-    private fun createTextRow(keys: List<String>, sidePaddingDp: Int = 0): View {
+    private fun createCompositeTextRow(keysWithHint: List<Pair<String, String>>, sidePaddingDp: Int = 0): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
             setPadding(dpToPx(sidePaddingDp), dpToPx(3), dpToPx(sidePaddingDp), dpToPx(3))
         }
 
-        for (k in keys) {
-            val label = if (isShifted) k.uppercase() else k.lowercase()
-            val btn = createKeyButton(label).apply {
+        for ((primary, hint) in keysWithHint) {
+            val mainLabel = if (isShifted) primary.uppercase() else primary.lowercase()
+            val keyView = createCompositeKeyView(mainLabel, hint).apply {
                 layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                     setMargins(dpToPx(3), 0, dpToPx(3), 0)
                 }
-                setFastTouchListener {
-                    onKeyClickListener?.invoke(label)
-                }
+                setKeyTouchWithLongPress(
+                    onTap = {
+                        onKeyClickListener?.invoke(mainLabel)
+                    },
+                    onLongPress = {
+                        onKeyClickListener?.invoke(hint)
+                    }
+                )
             }
-            row.addView(btn)
+            row.addView(keyView)
         }
         return row
     }
 
-    private fun createTextRow3(keys: List<String>): View {
+    private fun createTextRow3(keysWithHint: List<Pair<String, String>>): View {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
@@ -158,24 +183,27 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
         row.addView(shiftBtn)
 
-        for (k in keys) {
-            val label = if (isShifted) k.uppercase() else k.lowercase()
-            val btn = createKeyButton(label).apply {
+        for ((primary, hint) in keysWithHint) {
+            val mainLabel = if (isShifted) primary.uppercase() else primary.lowercase()
+            val keyView = createCompositeKeyView(mainLabel, hint).apply {
                 layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                     setMargins(dpToPx(3), 0, dpToPx(3), 0)
                 }
-                setFastTouchListener {
-                    onKeyClickListener?.invoke(label)
-                }
+                setKeyTouchWithLongPress(
+                    onTap = {
+                        onKeyClickListener?.invoke(mainLabel)
+                    },
+                    onLongPress = {
+                        onKeyClickListener?.invoke(hint)
+                    }
+                )
             }
-            row.addView(btn)
+            row.addView(keyView)
         }
 
-        // 退格鍵
+        // 退格鍵（支援長按持續連續快速刪除）
         val delBtn = createSpecialButton("⌫", weight = 1.3f).apply {
-            setFastTouchListener {
-                onBackspaceListener?.invoke()
-            }
+            setRepeatBackspaceTouchListener()
         }
         row.addView(delBtn)
 
@@ -216,9 +244,9 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             row3Layout.addView(btn)
         }
 
-        // 退格鍵
+        // 退格鍵（長按連刪）
         val delBtn = createSpecialButton("⌫", weight = 1.3f).apply {
-            setFastTouchListener { onBackspaceListener?.invoke() }
+            setRepeatBackspaceTouchListener()
         }
         row3Layout.addView(delBtn)
         addView(row3Layout)
@@ -261,7 +289,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
 
         val delBtn = createSpecialButton("⌫", weight = 1.3f).apply {
-            setFastTouchListener { onBackspaceListener?.invoke() }
+            setRepeatBackspaceTouchListener()
         }
         row3Layout.addView(delBtn)
         addView(row3Layout)
@@ -295,7 +323,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
 
         val delBtn = createSpecialButton("⌫", weight = 1.2f).apply {
-            setFastTouchListener { onBackspaceListener?.invoke() }
+            setRepeatBackspaceTouchListener()
         }
         row3Layout.addView(delBtn)
         addView(row3Layout)
@@ -403,12 +431,133 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         return row
     }
 
-    // ================= 輔助構造與觸覺動效 =================
+    // ================= 複合按鍵視圖 (字母 + 頂部小數字/標點) =================
+    private fun createCompositeKeyView(mainChar: String, hintChar: String): View {
+        return LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = createKeyBackground(Color.WHITE, Color.parseColor("#E2E4E9"))
+            isClickable = true
+            isFocusable = true
+            setPadding(0, dpToPx(2), 0, dpToPx(2))
+
+            // 頂部小副標 (數字或標點)
+            val hintView = TextView(context).apply {
+                text = hintChar
+                textSize = 9.5f
+                setTextColor(Color.parseColor("#8E8E93"))
+                gravity = Gravity.CENTER
+            }
+            addView(hintView)
+
+            // 主字母
+            val mainView = TextView(context).apply {
+                text = mainChar
+                textSize = 18f
+                setTextColor(Color.parseColor("#1C1C1E"))
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            }
+            addView(mainView)
+        }
+    }
 
     /**
-     * 極致跟手的觸控監聽：手指按下的瞬間（ACTION_DOWN）立刻觸發並產生微震動與視覺反饋，
-     * 無需等待抬手延遲，同時處理抬手與滑出取消。
+     * 支援短按上屏主字符、長按上屏副標字符 (數字/符號) 的觸控監聽
      */
+    private fun View.setKeyTouchWithLongPress(onTap: () -> Unit, onLongPress: () -> Unit) {
+        var isLongPressed = false
+        val longPressRunnable = Runnable {
+            isLongPressed = true
+            triggerHaptic()
+            if (settings.keyAnimation) {
+                scaleX = 1.05f
+                scaleY = 1.05f
+            }
+            onLongPress()
+        }
+
+        setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    isLongPressed = false
+                    v.isPressed = true
+                    if (settings.keyAnimation) {
+                        v.scaleX = 0.94f
+                        v.scaleY = 0.94f
+                    }
+                    handler.postDelayed(longPressRunnable, 350) // 350ms 判定為長按
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    handler.removeCallbacks(longPressRunnable)
+                    if (settings.keyAnimation) {
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    }
+                    if (!isLongPressed) {
+                        triggerHaptic()
+                        onTap()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
+                    handler.removeCallbacks(longPressRunnable)
+                    if (settings.keyAnimation) {
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    /**
+     * 退格鍵（Backspace ⌫）連續長按自動連刪監聽：
+     * 按下立即刪除一次；長按 350ms 後，以 50ms 間隔持續高速刪除，鬆手即止。
+     */
+    private fun View.setRepeatBackspaceTouchListener() {
+        var repeatRunnable: Runnable? = null
+        repeatRunnable = Runnable {
+            triggerHaptic()
+            onBackspaceListener?.invoke()
+            handler.postDelayed(repeatRunnable!!, 50) // 連刪速度：每秒 20 字
+        }
+
+        val startRepeatRunnable = Runnable {
+            handler.post(repeatRunnable!!)
+        }
+
+        setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.isPressed = true
+                    if (settings.keyAnimation) {
+                        v.scaleX = 0.94f
+                        v.scaleY = 0.94f
+                    }
+                    triggerHaptic()
+                    onBackspaceListener?.invoke() // 立即刪除一次
+                    handler.postDelayed(startRepeatRunnable, 350) // 350ms 後進入連刪
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
+                    handler.removeCallbacks(startRepeatRunnable)
+                    repeatRunnable?.let { handler.removeCallbacks(it) }
+                    if (settings.keyAnimation) {
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun View.setFastTouchListener(onTrigger: () -> Unit) {
         setOnTouchListener { v, event ->
             when (event.actionMasked) {

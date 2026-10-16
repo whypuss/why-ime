@@ -22,6 +22,12 @@ pub enum Language {
 
     /// 德语。
     German,
+
+    /// 韩语（朝鲜语）。
+    Korean,
+
+    /// 葡萄牙语。
+    Portuguese,
 }
 
 impl Language {
@@ -34,6 +40,8 @@ impl Language {
             Self::Spanish => "es",
             Self::Vietnamese => "vi",
             Self::German => "de",
+            Self::Korean => "ko",
+            Self::Portuguese => "pt",
         }
     }
 }
@@ -53,6 +61,8 @@ impl FromStr for Language {
             "es" | "es-es" | "spanish" => Ok(Self::Spanish),
             "vi" | "vi-vn" | "vietnamese" => Ok(Self::Vietnamese),
             "de" | "german" => Ok(Self::German),
+            "ko" | "ko-kr" | "korean" => Ok(Self::Korean),
+            "pt" | "pt-br" | "pt-pt" | "portuguese" => Ok(Self::Portuguese),
             other => Err(UnknownLanguage(other.to_owned())),
         }
     }

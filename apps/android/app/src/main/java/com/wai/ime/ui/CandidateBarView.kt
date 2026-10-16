@@ -30,10 +30,19 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
     private var lastPreedit: String = ""
     private var lastCandidates: List<Candidate> = emptyList()
 
+    // 預分配可重複使用的候選 View 緩存池，消除輸入時頻繁 new View 的 GC 抖動
+    private val viewPool = ArrayList<CandidateItemViewHolder>()
+
+    private class CandidateItemViewHolder(
+        val root: LinearLayout,
+        val chineseText: TextView,
+        val foreignText: TextView
+    )
+
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.parseColor("#F5F5F7"))
-        setPadding(dpToPx(6), dpToPx(4), dpToPx(6), dpToPx(4))
+        setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
 
         // 頂部拼音顯示
         preeditView = TextView(context).apply {
@@ -70,7 +79,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
     }
 
     /**
-     * 更新候選條狀態
+     * 更新候選條狀態（採用 ViewHolder 複用，零 GC 延遲極速刷新）
      */
     fun updateState(preedit: String, candidates: List<Candidate>) {
         lastPreedit = preedit
@@ -83,58 +92,76 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             preeditView.visibility = View.GONE
         }
 
-        candidateContainer.removeAllViews()
+        val count = candidates.size
 
-        if (candidates.isEmpty()) {
-            return
+        // 確保 View 池足夠
+        while (viewPool.size < count) {
+            viewPool.add(createViewHolder())
         }
 
-        candidates.forEachIndexed { index, candidate ->
-            val itemView = createCandidateItemView(index, candidate)
-            candidateContainer.addView(itemView)
+        // 把當前所需數量的 View 加入 container
+        if (candidateContainer.childCount != count) {
+            candidateContainer.removeAllViews()
+            for (i in 0 until count) {
+                candidateContainer.addView(viewPool[i].root)
+            }
         }
-        scrollView.scrollTo(0, 0)
+
+        for (i in 0 until count) {
+            val candidate = candidates[i]
+            val vh = viewPool[i]
+
+            vh.chineseText.text = "${i + 1}. ${candidate.text}"
+            vh.chineseText.textSize = candidateFontSize
+
+            val foreignLabel = candidate.formatJapaneseLabel()
+            if (foreignLabel != null) {
+                vh.foreignText.text = foreignLabel
+                vh.foreignText.textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
+                vh.foreignText.visibility = View.VISIBLE
+            } else {
+                vh.foreignText.visibility = View.GONE
+            }
+
+            vh.root.setOnClickListener {
+                onCandidateClickListener?.invoke(i)
+            }
+        }
+
+        if (preedit.isEmpty() || candidates.isEmpty()) {
+            scrollView.scrollTo(0, 0)
+        }
     }
 
     private fun refreshCurrentViews() {
         updateState(lastPreedit, lastCandidates)
     }
 
-    private fun createCandidateItemView(index: Int, candidate: Candidate): View {
+    private fun createViewHolder(): CandidateItemViewHolder {
         val itemLayout = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dpToPx(12), dpToPx(4), dpToPx(12), dpToPx(4))
+            setPadding(dpToPx(12), dpToPx(3), dpToPx(12), dpToPx(3))
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
-            setOnClickListener {
-                onCandidateClickListener?.invoke(index)
-            }
         }
 
-        // 1. 中文候選字 (第一行)
         val chineseText = TextView(context).apply {
-            text = "${index + 1}. ${candidate.text}"
             textSize = candidateFontSize
             setTextColor(Color.parseColor("#1C1C1E"))
             typeface = Typeface.DEFAULT_BOLD
         }
         itemLayout.addView(chineseText)
 
-        // 2. 日語釋義 + 假名 (第二行，青簡核心特點)
-        val japaneseLabel = candidate.formatJapaneseLabel()
-        if (japaneseLabel != null) {
-            val japaneseText = TextView(context).apply {
-                text = japaneseLabel
-                textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
-                setTextColor(Color.parseColor("#8E8E93"))
-                maxLines = 1
-            }
-            itemLayout.addView(japaneseText)
+        val foreignText = TextView(context).apply {
+            textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
+            setTextColor(Color.parseColor("#8E8E93"))
+            maxLines = 1
         }
+        itemLayout.addView(foreignText)
 
-        return itemLayout
+        return CandidateItemViewHolder(itemLayout, chineseText, foreignText)
     }
 
     private fun dpToPx(dp: Int): Int {

@@ -129,6 +129,11 @@ class WaiInputMethodService : InputMethodService() {
         return rootView
     }
 
+    override fun onEvaluateInputViewShown(): Boolean {
+        // 解決 vivo 等部分國產手機/定製系統因硬體鍵盤狀態誤判或暗中攔截導致鍵盤無法彈出的 bug
+        return true
+    }
+
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         // 每次彈出鍵盤時，刷新最新設置與頂部欄狀態
@@ -279,10 +284,18 @@ class WaiInputMethodService : InputMethodService() {
     }
 
     /**
-     * 頂部欄一鍵切換學習目標語言對照（日語、英語、西語、德語、越語）
+     * 頂部欄一鍵切換學習目標語言對照（日語、英語、西語、德語、越語、韓語、葡語）
      */
     private fun showLanguageSwitchDialog() {
-        val langs = arrayOf("ja" to "日語 (日本語)", "en" to "英語 (English)", "es" to "西班牙語 (Español)", "de" to "德語 (Deutsch)", "vi" to "越南語 (Tiếng Việt)")
+        val langs = arrayOf(
+            "ja" to "日語 (日本語)",
+            "en" to "英語 (English)",
+            "es" to "西班牙語 (Español)",
+            "de" to "德語 (Deutsch)",
+            "vi" to "越南語 (Tiếng Việt)",
+            "ko" to "韓語 (한국어)",
+            "pt" to "葡萄牙語 (Português)"
+        )
         val names = langs.map { it.second }.toTypedArray()
         val codes = langs.map { it.first }.toTypedArray()
         val currentIdx = codes.indexOf(settings.targetLanguage).coerceAtLeast(0)

@@ -61,6 +61,22 @@ pub const GERMAN_SYSTEM_PROMPT: &str = "你是汉德词典编纂者。给每个�
 输出严格的 JSON：{\"items\":[{\"w\":\"房子\",\"pos\":\"n.\",\"senses\":[{\"t\":\"das Haus\"}]}]}。\n\
 items 与输入的词一一对应、顺序一致、每个词恰好一项，w 必须原样照抄输入的词。";
 
+pub const KOREAN_SYSTEM_PROMPT: &str = "你是汉韩词典编纂者。给每个中文词写最简短的韩文对应词，供拼音输入法在候选词旁边一行显示，所以只要词、不要解释。\n\
+规则：\n\
+- pos：这个中文词最主要的词性，只能是 n. v. adj. adv. pron. prep. conj. num. m. part. int. phr. 之一（m. 量词，part. 助词，phr. 短语或成语）。\n\
+- senses：1 到 2 条最贴切的韩文对应词，按常用度排；使用谚文字母（Hangul）；不要括号、不要解释、不要例句。\n\
+- 人名地名等专名照译；多义词只取最常用的义项；网络用语、方言也要给最接近的说法；没有把握也要给最可能的答案，不要留空。\n\
+输出严格的 JSON：{\"items\":[{\"w\":\"开发\",\"pos\":\"v.\",\"senses\":[{\"t\":\"개발하다\"}]}]}。\n\
+items 与输入的词一一对应、顺序一致、每个词恰好一项，w 必须原样照抄输入的词。";
+
+pub const PORTUGUESE_SYSTEM_PROMPT: &str = "你是汉葡词典编纂者。给每个中文词写最简短的葡萄牙文对应词，供拼音输入法在候选词旁边一行显示，所以只要词、不要解释。\n\
+规则：\n\
+- pos：这个中文词最主要的词性，只能是 n. v. adj. adv. pron. prep. conj. num. m. part. int. phr. 之一（m. 量词，part. 助词，phr. 短语或成语）。\n\
+- senses：1 到 2 条最贴切的葡萄牙文对应词，按常用度排；每条不超过 3 个葡语单词；动词用原形（不定式），名词用单数，形容词用阳性单数；不要括号、不要解释、不要例句。\n\
+- 人名地名等专名照译；多义词只取最常用的义项；网络用语、方言也要给最接近的说法；没有把握也要给最可能的答案，不要留空。\n\
+输出严格的 JSON：{\"items\":[{\"w\":\"开发\",\"pos\":\"v.\",\"senses\":[{\"t\":\"desenvolver\"}]}]}。\n\
+items 与输入的词一一对应、顺序一致、每个词恰好一项，w 必须原样照抄输入的词。";
+
 /// 学习语言对应的系统提示；中文没有（不会请求）。
 pub fn system_prompt(language: Language) -> &'static str {
     match language {
@@ -68,6 +84,8 @@ pub fn system_prompt(language: Language) -> &'static str {
         Language::Spanish => SPANISH_SYSTEM_PROMPT,
         Language::Vietnamese => VIETNAMESE_SYSTEM_PROMPT,
         Language::German => GERMAN_SYSTEM_PROMPT,
+        Language::Korean => KOREAN_SYSTEM_PROMPT,
+        Language::Portuguese => PORTUGUESE_SYSTEM_PROMPT,
         Language::English | Language::Chinese => ENGLISH_SYSTEM_PROMPT,
     }
 }
@@ -181,6 +199,18 @@ fn clean_text(raw: &str, language: Language) -> Option<String> {
             text.chars().count() <= MAX_GERMAN_CHARS
                 && text.split_whitespace().count() <= 4
                 && text.chars().all(is_latin_word_char)
+        }
+        Language::Portuguese => {
+            text.chars().count() <= MAX_SPANISH_CHARS
+                && text.split_whitespace().count() <= 4
+                && text.chars().all(is_latin_word_char)
+        }
+        Language::Korean => {
+            text.chars().count() <= 24
+                && text.split_whitespace().count() <= 4
+                && text.chars().all(|c| {
+                    c.is_whitespace() || matches!(c as u32, 0xAC00..=0xD7A3 | 0x1100..=0x11FF | 0x3130..=0x318F)
+                })
         }
         Language::English | Language::Chinese => {
             text.len() <= MAX_ENGLISH_BYTES

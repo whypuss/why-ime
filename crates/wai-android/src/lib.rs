@@ -16,53 +16,42 @@ use qingjian_dictionary::Dictionary;
 use qingjian_translate::Glossary;
 use serde::Serialize;
 
-/// 傳遞給 Android 端的候選詞資訊（包含中文與日語釋義/假名）。
+/// 傳遞給 Android 端的候選詞資訊（包含中文與外語釋義/假名）。
 #[derive(Debug, Clone, Serialize)]
 pub struct CandidateDto {
     /// 候選中文詞（例如："開發"）
     pub text: String,
-    /// 拼音音節（例如：["kai", "fa"]）
-    pub syllables: Vec<String>,
     /// 是否有翻譯
     pub has_translation: bool,
-    /// 目標語言（例如："ja"）
-    pub target_lang: Option<String>,
     /// 第一條日語/外語釋義（例如："開発する"）
     pub translation_text: Option<String>,
-    /// 假名讀音（例如："かいはつする"）
+    /// 假名/讀音（例如："かいはつする"）
     pub reading: Option<String>,
     /// 詞性（例如："v."）
     pub pos: Option<String>,
-    /// 生詞標記
-    pub fresh: bool,
 }
 
 impl From<&Candidate> for CandidateDto {
     fn from(c: &Candidate) -> Self {
-        let (has_translation, target_lang, translation_text, reading, pos, fresh) =
+        let (has_translation, translation_text, reading, pos) =
             if let Some(ref trans) = c.translation {
                 let first_sense = trans.senses().first();
                 (
                     true,
-                    Some(trans.language.code().to_string()),
                     first_sense.map(|s| s.text.clone()),
                     first_sense.and_then(|s| s.reading.clone()),
                     first_sense.and_then(|s| s.part_of_speech.map(|p| p.abbreviation().to_string())),
-                    first_sense.map_or(false, |s| s.fresh),
                 )
             } else {
-                (false, None, None, None, None, false)
+                (false, None, None, None)
             };
 
         CandidateDto {
             text: c.text.clone(),
-            syllables: c.syllables.clone(),
             has_translation,
-            target_lang,
             translation_text,
             reading,
             pos,
-            fresh,
         }
     }
 }
