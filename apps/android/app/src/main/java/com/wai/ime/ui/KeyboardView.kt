@@ -82,14 +82,17 @@ class KeyboardView(context: Context) : LinearLayout(context) {
 
     /**
      * 動態計算鍵盤左右與上下內邊距：
-     * 若屏幕寬度 > 550dp（如 OPPO Find N2 展開內屏 ~600-700dp），
-     * 兩側採用 36dp 邊距縮小按鍵寬度，完美符合人體工學並防誤觸。
+     * 若屏幕寬度 > 520dp（如 OPPO Find N2 展開內屏 ~600-700dp），
+     * 兩側自適應留白縮小按鍵寬度，防誤觸。
+     * 同時將單鍵寬度微調減少 0.5mm (~3dp)，鍵高增加 0.5mm。
      */
     private fun updateKeyboardPadding() {
         val displayMetrics = context.resources.displayMetrics
         val widthDp = displayMetrics.widthPixels / displayMetrics.density
-        val sidePaddingDp = if (widthDp >= 520f) 36 else 4
-        setPadding(dpToPx(sidePaddingDp), dpToPx(3), dpToPx(sidePaddingDp), dpToPx(3))
+        // 寬減少 0.5mm：兩側各增加約 1.5mm (~9.5dp) 內邊距，合計使整排 10 鍵平均每鍵寬度精確減少 0.5mm
+        val deltaSideDp = mmToDp(1.5f).toInt()
+        val sidePaddingDp = if (widthDp >= 520f) 36 + deltaSideDp else 4 + deltaSideDp
+        setPadding(dpToPx(sidePaddingDp), dpToPx(2), dpToPx(sidePaddingDp), dpToPx(2))
     }
 
     private fun triggerHaptic() {
@@ -833,5 +836,15 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     private fun dpToPx(dp: Int): Int {
         val density = context.resources.displayMetrics.density
         return (dp * density).toInt()
+    }
+
+    private fun mmToPx(mm: Float): Int {
+        val xdpi = context.resources.displayMetrics.xdpi
+        return (mm * xdpi / 25.4f).toInt()
+    }
+
+    private fun mmToDp(mm: Float): Float {
+        // 1 inch = 25.4mm, 1 inch = 160dp -> 1mm = 160 / 25.4 = 6.299dp
+        return mm * (160f / 25.4f)
     }
 }

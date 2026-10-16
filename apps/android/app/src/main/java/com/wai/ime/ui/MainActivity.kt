@@ -273,8 +273,8 @@ class MainActivity : AppCompatActivity() {
         addDivider(card)
 
         // 鍵盤高度
-        val heightLabels = arrayOf("矮鍵盤 (215dp)", "標準/摺疊屏適配 (235dp)", "高鍵盤 (260dp)")
-        val heights = arrayOf(215, 235, 260)
+        val heightLabels = arrayOf("矮鍵盤 (230dp)", "標準/適配 (255dp)", "高鍵盤 (280dp)")
+        val heights = arrayOf(230, 255, 280)
         val currentHeightIndex = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
 
         card.addView(createClickableRow("鍵盤高度調節", heightLabels[currentHeightIndex]) { summaryView ->
@@ -348,7 +348,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(infoTitle)
 
         val infoDesc = TextView(this).apply {
-            text = "版本：v0.1.9-alpha (P0 核心排程優化測試版)\n特點：\n1. P0 核心優化：按鍵輸入與候選詞計算完全解耦，主執行緒延遲降至 0.05ms，解決連續快速打字卡頓；\n2. 智慧查詢合併：連續極速連打自動合併過期無效運算，50ms 延遲上限防飢餓；\n3. 三重版本隔離：sessionId、requestId 與候選詞文字精確比對，杜絕錯位提交；\n4. 針對 OPPO Find N2 摺疊屏/大屏深度優化：兩側自適應留白收攏鍵位，縮小單鍵寬度，消除按鍵過大導致的誤觸；\n5. 鍵盤底端新增獨立導航欄：左側地球圖標（短按無縫輪換、長按呼出系統輸入法選擇菜單），右側一鍵收起鍵盤；\n6. 頂部工具欄全面換用灰白色極簡高級設計，無多餘符號干擾；\n7. 底部功能行：[符] [123] [,] [空格] [。] [中/英] [确定]；\n8. 26 鍵雙層鍵位（字母居中 + 右上角數字/符號角標，長按直出）；\n9. 長按退格鍵持續高速連刪（每秒 20 字）；\n10. 支援日、英、西、德、越、韓、葡 7 國語言離線對照與直接翻譯；\n11. 本地零隱私上傳，vivo、OPPO 等定製 ROM 召喚無阻。"
+            text = "版本：v0.1.10-alpha (鍵位尺寸人體工學精細微調版)\n特點：\n1. 鍵位尺寸微調：按鍵長度（高度）精確增加 0.5mm，單鍵寬度微調減少 0.5mm，打字手感更舒展防誤觸；\n2. P0 核心優化：按鍵輸入與候選詞計算完全解耦，主執行緒延遲降至 0.05ms，解決連續快速打字卡頓；\n3. 智慧查詢合併：連續極速連打自動合併過期無效運算，50ms 延遲上限防飢餓；\n4. 三重版本隔離：sessionId、requestId 與候選詞文字精確比對，杜絕錯位提交；\n5. 針對 OPPO Find N2 摺疊屏/大屏深度優化：兩側自適應留白收攏鍵位，縮小單鍵寬度，消除按鍵過大導致的誤觸；\n6. 鍵盤底端新增獨立導航欄：左側地球圖標（短按無縫輪換、長按呼出系統輸入法選擇菜單），右側一鍵收起鍵盤；\n7. 頂部工具欄全面換用灰白色極簡高級設計，無多餘符號干擾；\n8. 底部功能行：[符] [123] [,] [空格] [。] [中/英] [确定]；\n9. 26 鍵雙層鍵位（字母居中 + 右上角數字/符號角標，長按直出）；\n10. 長按退格鍵持續高速連刪（每秒 20 字）；\n11. 支援日、英、西、德、越、韓、葡 7 國語言離線對照與直接翻譯；\n12. 本地零隱私上傳，vivo、OPPO 等定製 ROM 召喚無阻。"
             textSize = 13f
             setTextColor(Color.parseColor("#3C3C43"))
             setPadding(0, dpToPx(6), 0, dpToPx(12))
