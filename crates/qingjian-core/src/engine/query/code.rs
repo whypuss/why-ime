@@ -26,7 +26,7 @@ impl Engine {
         let start = Instant::now();
         let log_total = (table.total_frequency() as f64).max(1.0).ln();
         let mut scored: Vec<Scored<'_>> = table
-            .lookup(keys, MAX_CANDIDATES)
+            .lookup(keys, self.candidate_limit)
             .into_iter()
             .map(|hit| Scored {
                 hit,
@@ -43,7 +43,7 @@ impl Engine {
         // 同一段编码下选过的词优先，再按上下文得分（上一个上屏的词）；词频只在模型不认识时兜底
         let start = Instant::now();
         let letters = choice_key(keys, keys.len());
-        ranking::rank(&mut scored, MAX_CANDIDATES, |item| {
+        ranking::rank(&mut scored, self.candidate_limit, |item| {
             let choice = letters
                 .get(..item.coverage)
                 .map_or(0, |input| self.learner.choice_weight(input, item.hit.text));
@@ -125,7 +125,7 @@ impl Engine {
             .chain(std::mem::take(&mut query.candidates.items))
             .chain(tail)
             .filter(|candidate| seen.insert(candidate.text.clone()))
-            .take(MAX_CANDIDATES)
+            .take(self.candidate_limit)
             .collect();
         query.candidates.items = combined;
         Ok(query)

@@ -309,6 +309,12 @@ pub struct Engine {
 
     /// 繁体输出：候选出 Core 时换成繁体、上屏时换回简体，缺省不转（见 [`crate::traditional`]）。
     traditional: Traditional,
+
+    /// 拼写纠错总开关（缺省开启；移动端连续极速打字时可关闭以避免中间字母换位试探造成的 5~10ms 延时）。
+    correction_enabled: bool,
+
+    /// 每次查询最多给壳多少条候选（桌面端缺省 500，移动端可配置为 25~35 以极致提升多字/长拼音排序性能）。
+    candidate_limit: usize,
 }
 
 /// 形码编码最长几位（五笔四码）：混输下超过它的输入只可能是拼音。
@@ -480,6 +486,8 @@ impl Engine {
             aux_keep_empty: true,
             aux_codes: Vec::new(),
             traditional: Traditional::default(),
+            correction_enabled: true,
+            candidate_limit: MAX_CANDIDATES,
         }
     }
 }

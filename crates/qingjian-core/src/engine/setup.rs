@@ -5,7 +5,7 @@ use super::aux_code::is_valid_aux_code_key;
 use super::{
     DEFAULT_AUX_CODE_KEY, Engine, GlossFiller, InputLogger, Learner, ModeKeys, NEURAL_MARGIN,
     NEURAL_WEIGHT, Predictor, RESCORE_CONTEXT_CHARS, Translator, UsageMeter, UsageSummary,
-    VocabularyTracker, marked_rest,
+    VocabularyTracker, marked_rest, MAX_CANDIDATES,
 };
 use crate::candidate::Language;
 use crate::correction::TypoCosts;
@@ -264,6 +264,28 @@ impl Engine {
     /// 每次查询最多插入几个符号（0–3），规则同 [`Engine::set_emoji_limit`]。
     pub fn set_symbol_limit(&mut self, limit: usize) {
         self.symbol_limit = limit.min(EMOJI_TOTAL);
+    }
+
+    /// 每次查询最多给壳多少条候选（0 则使用缺省 [`MAX_CANDIDATES`]）。
+    /// 移动端设置为 25~35 可大幅降低 multi-syllable 字典匹配与语言模型 Viterbi 排序的 CPU 耗时。
+    pub fn with_candidate_limit(mut self, limit: usize) -> Self {
+        self.candidate_limit = if limit == 0 { MAX_CANDIDATES } else { limit };
+        self
+    }
+
+    /// 运行时设置候选上限。
+    pub fn set_candidate_limit(&mut self, limit: usize) {
+        self.candidate_limit = if limit == 0 { MAX_CANDIDATES } else { limit };
+    }
+
+    /// 设置是否开启拼写纠错。
+    pub fn with_correction(mut self, enabled: bool) -> Self {
+        self.correction_enabled = enabled;
+        self
+    }
+
+    pub fn set_correction(&mut self, enabled: bool) {
+        self.correction_enabled = enabled;
     }
 
     pub fn with_fuzzy(mut self, rules: FuzzyRules) -> Self {

@@ -65,8 +65,9 @@ impl Engine {
             }
         };
         // 拼音「不像话」时试拼写纠错；纠正生效则按纠正后的切分查词，原串只用来记学习与显示
-        let unlikely = correction::unlikely_pinyin(segmentations.first(), tail)
-            || correction::trailing_single_letter(segmentations.first());
+        let unlikely = self.correction_enabled
+            && (correction::unlikely_pinyin(segmentations.first(), tail)
+                || correction::trailing_single_letter(segmentations.first()));
         let correction = if unlikely {
             self.active_correction(scope)
         } else {
@@ -144,7 +145,7 @@ impl Engine {
         // `ba` 在「做了」后面出 吧、句首出 把
         let log_total = (self.total_frequency() as f64).max(1.0).ln();
         let letters = choice_key(scope, scope.len());
-        ranking::rank(&mut scored, MAX_CANDIDATES, |item| {
+        ranking::rank(&mut scored, self.candidate_limit, |item| {
             let hit = &item.hit;
             // 纠错生效时覆盖的是纠正后的字母，换算回原串再查「这个输入串下选过什么」
             let covered = correction
