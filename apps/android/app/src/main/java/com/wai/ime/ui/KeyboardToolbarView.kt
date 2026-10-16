@@ -13,11 +13,11 @@ import android.widget.TextView
 /**
  * 鍵盤頂部功能欄目（Toolbar）：
  * 乾淨極簡的灰白色系商務設計，無多餘彩色 Emoji 符號，
- * 包含：輸出模式、切換鍵盤、語言切換、繁簡切換、表情、設置。
+ * 包含：輸出模式、語言切換、繁簡切換、表情、設置。
+ * （切換鍵盤已移至鍵盤底部獨立一欄的地球圖標）
  */
 class KeyboardToolbarView(context: Context) : LinearLayout(context) {
 
-    var onSwitchImeClick: (() -> Unit)? = null
     var onLanguageClick: (() -> Unit)? = null
     var onOutputTranslationToggleClick: (() -> Unit)? = null
     var onTraditionalToggleClick: (() -> Unit)? = null
@@ -52,31 +52,25 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
         }
         container.addView(outputTransBtn)
 
-        // 2. 鍵盤切換
-        val switchImeBtn = createToolbarButton("切換鍵盤") {
-            onSwitchImeClick?.invoke()
-        }
-        container.addView(switchImeBtn)
-
-        // 3. 語言切換
+        // 2. 語言切換
         langBtn = createToolbarButton("語言: 日語") {
             onLanguageClick?.invoke()
         }
         container.addView(langBtn)
 
-        // 4. 繁體/簡體一鍵切換
+        // 3. 繁體/簡體一鍵切換
         tradBtn = createToolbarButton("繁/簡") {
             onTraditionalToggleClick?.invoke()
         }
         container.addView(tradBtn)
 
-        // 5. 表情
+        // 4. 表情面板
         emojiBtn = createToolbarButton("表情") {
             onEmojiClick?.invoke()
         }
         container.addView(emojiBtn)
 
-        // 6. 更多設定
+        // 5. 偏好設置中心
         val settingsBtn = createToolbarButton("設置") {
             onSettingsClick?.invoke()
         }

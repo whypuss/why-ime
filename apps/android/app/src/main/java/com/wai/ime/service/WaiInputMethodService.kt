@@ -52,15 +52,12 @@ class WaiInputMethodService : InputMethodService() {
             )
         }
 
-        // 1. 頂部工具欄 (功能欄目：鍵盤切換、語言切換、繁簡切換、表情、設置)
+        // 1. 頂部工具欄 (功能欄目：語言切換、繁簡切換、表情、設置)
         toolbarView = KeyboardToolbarView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            onSwitchImeClick = {
-                handleSwitchIme()
-            }
             onLanguageClick = {
                 showLanguageSwitchDialog()
             }
@@ -96,7 +93,7 @@ class WaiInputMethodService : InputMethodService() {
         }
         rootView.addView(candidateBarView)
 
-        // 3. 底部鍵盤區域 (含逗號、句號、中英切換)
+        // 3. 底部鍵盤區域 (含逗號、句號、中英切換、以及底欄地球圖標切換輸入法)
         val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
         keyboardView = KeyboardView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -117,6 +114,12 @@ class WaiInputMethodService : InputMethodService() {
             }
             onSwitchImeListener = {
                 handleSwitchIme()
+            }
+            onSwitchImeLongClickListener = {
+                showInputMethodPicker()
+            }
+            onHideKeyboardListener = {
+                requestHideSelf(0)
             }
             onEnglishModeToggleListener = { isEnglish ->
                 if (isEnglish) {
@@ -254,6 +257,14 @@ class WaiInputMethodService : InputMethodService() {
         } else {
             imm.showInputMethodPicker()
         }
+    }
+
+    /**
+     * 長按地球圖標：直接彈出系統輸入法選擇列表（方便用戶手動選擇具體輸入法）
+     */
+    private fun showInputMethodPicker() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return
+        imm.showInputMethodPicker()
     }
 
     /**
