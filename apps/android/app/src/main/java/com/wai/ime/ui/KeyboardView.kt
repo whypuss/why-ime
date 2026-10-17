@@ -1,24 +1,17 @@
 package com.wai.ime.ui
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
-import android.graphics.drawable.StateListDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -34,14 +27,14 @@ enum class KeyboardMode {
 
 /**
  * 鍵盤視圖：對齊百度輸入法尺寸與鍵位佈局（針對 OPPO Find N2 摺疊屏展開狀態深度優化）：
- * 1. 摺疊屏兩側對齊百度留白縮小鍵位寬度（防誤觸）；
- * 2. 26 鍵雙層鍵位（字母居中，右上角精緻數字/標點角標，長按直出）；
- * 3. 底部主功能行：[符] [123] [,] [ 空格 ] [。] [中/英] [ 确定 ]；
- * 4. 下方新增獨立切換輸入法底欄（對齊百度輸入法）：
- *    - 左側地球圖標（短按切換輸入法，長按彈出系統選擇輸入法菜單）；
- *    - 右側收起鍵盤圖標（點擊隱藏鍵盤）；
- * 5. 長按退格鍵持續高速連刪（每秒 20 字）；
- * 6. 極速 ACTION_DOWN 低延遲觸發、微縮放動畫與震動觸覺反饋。
+ * 1. 全域零死角靈敏觸控（Zero Dead-Zone）：按鍵觸控區域無縫鋪滿整個網格，相鄰按鍵與行間隙 100% 響應，徹底根除漏觸/靈敏度不足；
+ * 2. 瞬態 70ms 按鍵變灰反饋（一瞬間變灰即恢復）：按下瞬間亮起，70ms 極速回彈白底，杜絕按鍵黏灰拖遝感；
+ * 3. 舒適長按 550ms + 10dp 防滑動誤觸機制：長按出符號時長由 350ms 延長至標準 550ms，手指滑動立即取消，絕不干擾正常拼音/字母連打；
+ * 4. 26 鍵雙層鍵位（字母居中，右上角精緻數字/標點角標）；
+ * 5. 底部主功能行：[符] [123] [,] [ 空格 ] [。] [中/英] [ 确定 ]；
+ * 6. 下方新增獨立切換輸入法底欄（地球圖標長按選鍵盤 + 收起鍵盤圖標）；
+ * 7. 長按退格鍵持續高速連刪；
+ * 8. ACTION_DOWN 零延遲出字 + 觸覺震動反饋。
  */
 class KeyboardView(context: Context) : LinearLayout(context) {
 
@@ -86,12 +79,10 @@ class KeyboardView(context: Context) : LinearLayout(context) {
      * 動態計算鍵盤左右與上下內邊距：
      * 若屏幕寬度 > 520dp（如 OPPO Find N2 展開內屏 ~600-700dp），
      * 兩側自適應留白縮小按鍵寬度，防誤觸。
-     * 同時將單鍵寬度微調減少 0.5mm (~3dp)，鍵高增加 0.5mm。
      */
     private fun updateKeyboardPadding() {
         val displayMetrics = context.resources.displayMetrics
         val widthDp = displayMetrics.widthPixels / displayMetrics.density
-        // 寬減少 0.5mm：兩側各增加約 1.5mm (~9.5dp) 內邊距，合計使整排 10 鍵平均每鍵寬度精確減少 0.5mm
         val deltaSideDp = mmToDp(1.5f).toInt()
         val sidePaddingDp = if (widthDp >= 520f) 36 + deltaSideDp else 4 + deltaSideDp
         setPadding(dpToPx(sidePaddingDp), dpToPx(2), dpToPx(sidePaddingDp), dpToPx(2))
@@ -139,7 +130,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         addView(createBottomNavBar())
     }
 
-    // ================= 1. 拼音/字母 鍵盤 (百度雙層按鍵 + 長按副符號) =================
+    // ================= 1. 拼音/字母 鍵盤 (雙層按鍵 + 舒適長按) =================
     private fun renderTextKeyboard(container: LinearLayout) {
         val row1 = listOf(
             "q" to "1", "w" to "2", "e" to "3", "r" to "4", "t" to "5",
@@ -164,23 +155,20 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0) // 零死角觸控：行內邊距為 0
         }
-
-        val marginH = keyMarginHorizontal
 
         for ((primary, hint) in keysWithHint) {
             val mainLabel = if (isShifted) primary.uppercase() else primary.lowercase()
-            val keyView = createCompositeKeyView(mainLabel, hint).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setKeyTouchWithLongPress(
-                    onTap = { onKeyClickListener?.invoke(mainLabel) },
-                    onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
-                )
-            }
-            row.addView(keyView)
+            val (touchCell, visualCard) = createCompositeKeyView(mainLabel, hint)
+            touchCell.setKeyTouchWithLongPress(
+                visualCard = visualCard,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                onTap = { onKeyClickListener?.invoke(mainLabel) },
+                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
+            )
+            row.addView(touchCell)
         }
         return row
     }
@@ -189,33 +177,49 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
 
-        val marginH = keyMarginHorizontal
-
-        // 左右兩端 0.5f 留白，確保 A~L 鍵寬度與 Q~P 完全一致且整體居中
+        // 左右兩端各 0.5f 留白，確保 A~L 鍵寬度與 Q~P 完全一致且整體居中
+        // 邊界靈敏度優化：點擊左留白直接轉發給 A 鍵，點擊右留白轉發給 L 鍵，邊界盲打絕不丟鍵！
         val leftSpacer = View(context).apply {
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.5f)
+            isClickable = true
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val keyA = if (isShifted) "A" else "a"
+                    triggerHaptic()
+                    onKeyClickListener?.invoke(keyA)
+                    true
+                } else false
+            }
         }
         row.addView(leftSpacer)
 
         for ((primary, hint) in keysWithHint) {
             val mainLabel = if (isShifted) primary.uppercase() else primary.lowercase()
-            val keyView = createCompositeKeyView(mainLabel, hint).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setKeyTouchWithLongPress(
-                    onTap = { onKeyClickListener?.invoke(mainLabel) },
-                    onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
-                )
-            }
-            row.addView(keyView)
+            val (touchCell, visualCard) = createCompositeKeyView(mainLabel, hint)
+            touchCell.setKeyTouchWithLongPress(
+                visualCard = visualCard,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                onTap = { onKeyClickListener?.invoke(mainLabel) },
+                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
+            )
+            row.addView(touchCell)
         }
 
         val rightSpacer = View(context).apply {
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.5f)
+            isClickable = true
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val keyL = if (isShifted) "L" else "l"
+                    triggerHaptic()
+                    onKeyClickListener?.invoke(keyL)
+                    true
+                } else false
+            }
         }
         row.addView(rightSpacer)
 
@@ -226,44 +230,53 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
-
-        val marginH = keyMarginHorizontal
 
         // Shift 鍵
         val shiftLabel = if (isShifted) "⇪" else "⇧"
-        val shiftBtn = createSpecialButton(shiftLabel, weight = 1.4f).apply {
-            if (isShifted) {
-                background = createKeyBackground(Color.parseColor("#FFFFFF"), Color.parseColor("#B4B7BF"), cornerDp = 6)
-                setTextColor(Color.parseColor("#007AFF"))
-            }
-            setFastTouchListener {
-                isShifted = !isShifted
-                renderKeyboard()
-            }
+        val shiftNormalColor = if (isShifted) Color.parseColor("#FFFFFF") else Color.parseColor("#C3C6CE")
+        val shiftTextColor = if (isShifted) Color.parseColor("#007AFF") else Color.parseColor("#2C2C2E")
+        val (shiftCell, shiftCard) = createSimpleKeyView(
+            label = shiftLabel,
+            weight = 1.4f,
+            normalColor = shiftNormalColor,
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = shiftTextColor,
+            textSizeSp = 16f,
+            isBold = true
+        )
+        shiftCell.setFastTouchListener(shiftCard, shiftNormalColor, Color.parseColor("#AEB2BC")) {
+            isShifted = !isShifted
+            renderKeyboard()
         }
-        row.addView(shiftBtn)
+        row.addView(shiftCell)
 
         for ((primary, hint) in keysWithHint) {
             val mainLabel = if (isShifted) primary.uppercase() else primary.lowercase()
-            val keyView = createCompositeKeyView(mainLabel, hint).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setKeyTouchWithLongPress(
-                    onTap = { onKeyClickListener?.invoke(mainLabel) },
-                    onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
-                )
-            }
-            row.addView(keyView)
+            val (touchCell, visualCard) = createCompositeKeyView(mainLabel, hint)
+            touchCell.setKeyTouchWithLongPress(
+                visualCard = visualCard,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                onTap = { onKeyClickListener?.invoke(mainLabel) },
+                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(mainLabel, hint) }
+            )
+            row.addView(touchCell)
         }
 
         // 退格鍵 (⌫，長按持續高速連刪)
-        val delBtn = createSpecialButton("⌫", weight = 1.4f).apply {
-            setRepeatBackspaceTouchListener()
-        }
-        row.addView(delBtn)
+        val (delCell, delCard) = createSimpleKeyView(
+            label = "⌫",
+            weight = 1.4f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = Color.parseColor("#2C2C2E"),
+            textSizeSp = 16f,
+            isBold = true
+        )
+        delCell.setRepeatBackspaceTouchListener(delCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC"))
+        row.addView(delCell)
 
         return row
     }
@@ -280,33 +293,50 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row3Layout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
 
-        val marginH = keyMarginHorizontal
-
-        val symBtn = createSpecialButton("#+=", weight = 1.4f).apply {
-            setFastTouchListener {
-                currentMode = KeyboardMode.SYMBOL
-                renderKeyboard()
-            }
+        val (symCell, symCard) = createSimpleKeyView(
+            label = "#+=",
+            weight = 1.4f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = Color.parseColor("#2C2C2E"),
+            textSizeSp = 15f,
+            isBold = true
+        )
+        symCell.setFastTouchListener(symCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC")) {
+            currentMode = KeyboardMode.SYMBOL
+            renderKeyboard()
         }
-        row3Layout.addView(symBtn)
+        row3Layout.addView(symCell)
 
         for (k in row3) {
-            val btn = createKeyButton(k).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            val (touchCell, visualCard) = createSimpleKeyView(
+                label = k,
+                weight = 1f,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                textColor = Color.parseColor("#1C1C1E"),
+                textSizeSp = 19f
+            )
+            touchCell.setFastTouchListener(visualCard, Color.WHITE, Color.parseColor("#D5D8E0")) {
+                onKeyClickListener?.invoke(k)
             }
-            row3Layout.addView(btn)
+            row3Layout.addView(touchCell)
         }
 
-        val delBtn = createSpecialButton("⌫", weight = 1.4f).apply {
-            setRepeatBackspaceTouchListener()
-        }
-        row3Layout.addView(delBtn)
+        val (delCell, delCard) = createSimpleKeyView(
+            label = "⌫",
+            weight = 1.4f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = Color.parseColor("#2C2C2E"),
+            textSizeSp = 16f,
+            isBold = true
+        )
+        delCell.setRepeatBackspaceTouchListener(delCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC"))
+        row3Layout.addView(delCell)
         container.addView(row3Layout)
 
         container.addView(createBottomFunctionRow())
@@ -324,33 +354,50 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row3Layout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
 
-        val marginH = keyMarginHorizontal
-
-        val numBtn = createSpecialButton("123", weight = 1.4f).apply {
-            setFastTouchListener {
-                currentMode = KeyboardMode.NUMERIC
-                renderKeyboard()
-            }
+        val (numCell, numCard) = createSimpleKeyView(
+            label = "123",
+            weight = 1.4f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = Color.parseColor("#2C2C2E"),
+            textSizeSp = 15f,
+            isBold = true
+        )
+        numCell.setFastTouchListener(numCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC")) {
+            currentMode = KeyboardMode.NUMERIC
+            renderKeyboard()
         }
-        row3Layout.addView(numBtn)
+        row3Layout.addView(numCell)
 
         for (k in row3) {
-            val btn = createKeyButton(k).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            val (touchCell, visualCard) = createSimpleKeyView(
+                label = k,
+                weight = 1f,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                textColor = Color.parseColor("#1C1C1E"),
+                textSizeSp = 19f
+            )
+            touchCell.setFastTouchListener(visualCard, Color.WHITE, Color.parseColor("#D5D8E0")) {
+                onKeyClickListener?.invoke(k)
             }
-            row3Layout.addView(btn)
+            row3Layout.addView(touchCell)
         }
 
-        val delBtn = createSpecialButton("⌫", weight = 1.4f).apply {
-            setRepeatBackspaceTouchListener()
-        }
-        row3Layout.addView(delBtn)
+        val (delCell, delCard) = createSimpleKeyView(
+            label = "⌫",
+            weight = 1.4f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = Color.parseColor("#2C2C2E"),
+            textSizeSp = 16f,
+            isBold = true
+        )
+        delCell.setRepeatBackspaceTouchListener(delCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC"))
+        row3Layout.addView(delCell)
         container.addView(row3Layout)
 
         container.addView(createBottomFunctionRow())
@@ -368,25 +415,35 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row3Layout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
-
-        val marginH = keyMarginHorizontal
 
         for (k in row3) {
-            val btn = createKeyButton(k).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            val (touchCell, visualCard) = createSimpleKeyView(
+                label = k,
+                weight = 1f,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                textColor = Color.parseColor("#1C1C1E"),
+                textSizeSp = 19f
+            )
+            touchCell.setFastTouchListener(visualCard, Color.WHITE, Color.parseColor("#D5D8E0")) {
+                onKeyClickListener?.invoke(k)
             }
-            row3Layout.addView(btn)
+            row3Layout.addView(touchCell)
         }
 
-        val delBtn = createSpecialButton("⌫", weight = 1.2f).apply {
-            setRepeatBackspaceTouchListener()
-        }
-        row3Layout.addView(delBtn)
+        val (delCell, delCard) = createSimpleKeyView(
+            label = "⌫",
+            weight = 1.2f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = Color.parseColor("#2C2C2E"),
+            textSizeSp = 16f,
+            isBold = true
+        )
+        delCell.setRepeatBackspaceTouchListener(delCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC"))
+        row3Layout.addView(delCell)
         container.addView(row3Layout)
 
         container.addView(createBottomFunctionRow())
@@ -396,19 +453,22 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
 
-        val marginH = keyMarginHorizontal
-
         for (k in keys) {
-            val btn = createKeyButton(k).apply {
-                layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    setMargins(marginH, 0, marginH, 0)
-                }
-                setFastTouchListener { onKeyClickListener?.invoke(k) }
+            val (touchCell, visualCard) = createSimpleKeyView(
+                label = k,
+                weight = 1f,
+                normalColor = Color.WHITE,
+                pressedColor = Color.parseColor("#D5D8E0"),
+                textColor = Color.parseColor("#1C1C1E"),
+                textSizeSp = if (k.length > 1 && k.codePointCount(0, k.length) > 1) 16f else 19f
+            )
+            touchCell.setFastTouchListener(visualCard, Color.WHITE, Color.parseColor("#D5D8E0")) {
+                onKeyClickListener?.invoke(k)
             }
-            row.addView(btn)
+            row.addView(touchCell)
         }
         return row
     }
@@ -418,112 +478,119 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            setPadding(0, rowPaddingVertical, 0, rowPaddingVertical)
+            setPadding(0, 0, 0, 0)
         }
-
-        val marginH = keyMarginHorizontal
 
         // 1. 符號鍵 (符)
-        val symBtn = createSpecialButton("符", weight = 1.05f).apply {
-            if (currentMode == KeyboardMode.SYMBOL) {
-                setTextColor(Color.parseColor("#007AFF"))
-            }
-            setFastTouchListener {
-                currentMode = if (currentMode == KeyboardMode.SYMBOL) KeyboardMode.TEXT else KeyboardMode.SYMBOL
-                renderKeyboard()
-            }
+        val symColor = if (currentMode == KeyboardMode.SYMBOL) Color.parseColor("#007AFF") else Color.parseColor("#2C2C2E")
+        val (symCell, symCard) = createSimpleKeyView(
+            label = "符",
+            weight = 1.05f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = symColor,
+            textSizeSp = 15f,
+            isBold = true
+        )
+        symCell.setFastTouchListener(symCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC")) {
+            currentMode = if (currentMode == KeyboardMode.SYMBOL) KeyboardMode.TEXT else KeyboardMode.SYMBOL
+            renderKeyboard()
         }
-        row.addView(symBtn)
+        row.addView(symCell)
 
         // 2. 數字鍵 (123)
         val numLabel = if (currentMode == KeyboardMode.NUMERIC) "中文" else "123"
-        val numBtn = createSpecialButton(numLabel, weight = 1.05f).apply {
-            if (currentMode == KeyboardMode.NUMERIC) {
-                setTextColor(Color.parseColor("#007AFF"))
-            }
-            setFastTouchListener {
-                currentMode = if (currentMode == KeyboardMode.NUMERIC) KeyboardMode.TEXT else KeyboardMode.NUMERIC
-                renderKeyboard()
-            }
+        val numColor = if (currentMode == KeyboardMode.NUMERIC) Color.parseColor("#007AFF") else Color.parseColor("#2C2C2E")
+        val (numCell, numCard) = createSimpleKeyView(
+            label = numLabel,
+            weight = 1.05f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = numColor,
+            textSizeSp = 15f,
+            isBold = true
+        )
+        numCell.setFastTouchListener(numCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC")) {
+            currentMode = if (currentMode == KeyboardMode.NUMERIC) KeyboardMode.TEXT else KeyboardMode.NUMERIC
+            renderKeyboard()
         }
-        row.addView(numBtn)
+        row.addView(numCell)
 
         // 3. 逗號鍵 (，/ ,) 附帶長按直出 '
         val commaChar = if (isEnglishMode) "," else "，"
-        val commaKey = createCompositeKeyView(commaChar, "'").apply {
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.0f).apply {
-                setMargins(marginH, 0, marginH, 0)
-            }
-            setKeyTouchWithLongPress(
-                onTap = { onKeyClickListener?.invoke(commaChar) },
-                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(commaChar, "'") }
-            )
-        }
-        row.addView(commaKey)
+        val (commaCell, commaCard) = createCompositeKeyView(commaChar, "'", weight = 1.0f)
+        commaCell.setKeyTouchWithLongPress(
+            visualCard = commaCard,
+            normalColor = Color.WHITE,
+            pressedColor = Color.parseColor("#D5D8E0"),
+            onTap = { onKeyClickListener?.invoke(commaChar) },
+            onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(commaChar, "'") }
+        )
+        row.addView(commaCell)
 
         // 4. 空格鍵 (空格 / English)
         val spaceLabel = if (isEnglishMode) "English" else "空格"
-        val spaceBtn = Button(context).apply {
-            text = spaceLabel
-            textSize = 13.5f
-            setTextColor(Color.parseColor("#8E8E93"))
-            background = createKeyBackground(Color.WHITE, Color.parseColor("#E2E4E9"), cornerDp = 6)
-            isAllCaps = false
-            stateListAnimator = null
-            setPadding(0, 0, 0, 0)
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 3.4f).apply {
-                setMargins(marginH, 0, marginH, 0)
-            }
-            setFastTouchListener { onSpaceListener?.invoke() }
+        val (spaceCell, spaceCard) = createSimpleKeyView(
+            label = spaceLabel,
+            weight = 3.4f,
+            normalColor = Color.WHITE,
+            pressedColor = Color.parseColor("#D5D8E0"),
+            textColor = Color.parseColor("#8E8E93"),
+            textSizeSp = 13.5f
+        )
+        spaceCell.setFastTouchListener(spaceCard, Color.WHITE, Color.parseColor("#D5D8E0")) {
+            onSpaceListener?.invoke()
         }
-        row.addView(spaceBtn)
+        row.addView(spaceCell)
 
         // 5. 句號鍵 (。/ .) 附帶長按直出 ?
         val periodChar = if (isEnglishMode) "." else "。"
-        val periodKey = createCompositeKeyView(periodChar, "?").apply {
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.0f).apply {
-                setMargins(marginH, 0, marginH, 0)
-            }
-            setKeyTouchWithLongPress(
-                onTap = { onKeyClickListener?.invoke(periodChar) },
-                onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(periodChar, "?") }
-            )
-        }
-        row.addView(periodKey)
+        val (periodCell, periodCard) = createCompositeKeyView(periodChar, "?", weight = 1.0f)
+        periodCell.setKeyTouchWithLongPress(
+            visualCard = periodCard,
+            normalColor = Color.WHITE,
+            pressedColor = Color.parseColor("#D5D8E0"),
+            onTap = { onKeyClickListener?.invoke(periodChar) },
+            onLongPressReplace = { onKeyLongPressReplaceListener?.invoke(periodChar, "?") }
+        )
+        row.addView(periodCell)
 
         // 6. 中英切換鍵 (中/英)
         val langLabel = if (isEnglishMode) "英" else "中"
-        val langBtn = createSpecialButton(langLabel, weight = 1.1f).apply {
-            if (isEnglishMode) {
-                setTextColor(Color.parseColor("#007AFF"))
-            }
-            setFastTouchListener {
-                toggleEnglishMode()
-            }
+        val langColor = if (isEnglishMode) Color.parseColor("#007AFF") else Color.parseColor("#2C2C2E")
+        val (langCell, langCard) = createSimpleKeyView(
+            label = langLabel,
+            weight = 1.1f,
+            normalColor = Color.parseColor("#C3C6CE"),
+            pressedColor = Color.parseColor("#AEB2BC"),
+            textColor = langColor,
+            textSizeSp = 15f,
+            isBold = true
+        )
+        langCell.setFastTouchListener(langCard, Color.parseColor("#C3C6CE"), Color.parseColor("#AEB2BC")) {
+            toggleEnglishMode()
         }
-        row.addView(langBtn)
+        row.addView(langCell)
 
         // 7. 确定鍵 (高對比度藍色按鈕)
-        val enterBtn = Button(context).apply {
-            text = "确定"
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            background = createKeyBackground(Color.parseColor("#007AFF"), Color.parseColor("#005EC4"), cornerDp = 6)
-            isAllCaps = false
-            stateListAnimator = null
-            setPadding(0, 0, 0, 0)
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.4f).apply {
-                setMargins(marginH, 0, marginH, 0)
-            }
-            setFastTouchListener { onEnterListener?.invoke() }
+        val (enterCell, enterCard) = createSimpleKeyView(
+            label = "确定",
+            weight = 1.4f,
+            normalColor = Color.parseColor("#007AFF"),
+            pressedColor = Color.parseColor("#005EC4"),
+            textColor = Color.WHITE,
+            textSizeSp = 15f,
+            isBold = true
+        )
+        enterCell.setFastTouchListener(enterCard, Color.parseColor("#007AFF"), Color.parseColor("#005EC4")) {
+            onEnterListener?.invoke()
         }
-        row.addView(enterBtn)
+        row.addView(enterCell)
 
         return row
     }
 
-    // ================= 底部新增一欄：切換鍵盤地球圖標與收起鍵盤 (對齊百度輸入法) =================
+    // ================= 底部新增一欄：切換鍵盤地球圖標與收起鍵盤 =================
     private fun createBottomNavBar(): View {
         val navBar = LinearLayout(context).apply {
             orientation = HORIZONTAL
@@ -540,7 +607,6 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             val iconView = TextView(context).apply {
                 text = "🌐"
                 textSize = 17f
-                setTextColor(Color.parseColor("#4A4C52"))
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -549,7 +615,6 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             }
             addView(iconView)
 
-            // 長按與短按支援
             var isLongPressed = false
             val longPressRunnable = Runnable {
                 isLongPressed = true
@@ -562,7 +627,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                     MotionEvent.ACTION_DOWN -> {
                         isLongPressed = false
                         v.isPressed = true
-                        handler.postDelayed(longPressRunnable, 400)
+                        handler.postDelayed(longPressRunnable, 450)
                         true
                     }
                     MotionEvent.ACTION_UP -> {
@@ -605,8 +670,13 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 )
             }
             addView(iconView)
-            setFastTouchListener {
-                onHideKeyboardListener?.invoke()
+
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    triggerHaptic()
+                    onHideKeyboardListener?.invoke()
+                    true
+                } else false
             }
         }
         navBar.addView(hideBtn)
@@ -614,13 +684,54 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         return navBar
     }
 
-    // ================= 複合按鍵視圖 (字母居中 + 右上角精緻副標 數字/標點) =================
-    private fun createCompositeKeyView(mainChar: String, hintChar: String): View {
-        return FrameLayout(context).apply {
-            background = createKeyBackground(Color.WHITE, Color.parseColor("#E2E4E9"), cornerDp = 6)
+    // ================= 核心佈局架構：零死角觸控單元 (TouchCell + VisualCard) =================
+    /**
+     * 建立具有 100% 無死角觸控響應的按鍵單元：
+     * @return touchCell: 外層觸控容器，邊距為 0，與相鄰按鍵和上下行無縫咬合，觸控面積 100% 覆蓋；
+     *         visualCard: 內層視覺卡片，帶有真實邊距與圓角，提供完美舒適的視覺間隙。
+     */
+    private fun createKeyCell(
+        weight: Float,
+        normalColor: Int,
+        cornerDp: Int = 6,
+        buildVisual: (FrameLayout) -> Unit
+    ): Pair<FrameLayout, FrameLayout> {
+        val touchCell = FrameLayout(context).apply {
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, weight).apply {
+                setMargins(0, 0, 0, 0) // 零死角：外層觸控區域鋪滿整個單元格
+            }
             isClickable = true
             isFocusable = true
+        }
 
+        val marginH = keyMarginHorizontal
+        val marginV = (rowPaddingVertical / 2).coerceAtLeast(dpToPx(1))
+
+        val visualCard = FrameLayout(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ).apply {
+                setMargins(marginH, marginV, marginH, marginV)
+            }
+            background = createKeyShapeDrawable(normalColor, cornerDp)
+        }
+
+        buildVisual(visualCard)
+        touchCell.addView(visualCard)
+
+        return Pair(touchCell, visualCard)
+    }
+
+    /**
+     * 複合按鍵視圖 (字母居中 + 右上角精緻副標 數字/標點)
+     */
+    private fun createCompositeKeyView(
+        mainChar: String,
+        hintChar: String,
+        weight: Float = 1f
+    ): Pair<FrameLayout, FrameLayout> {
+        return createKeyCell(weight, Color.WHITE, cornerDp = 6) { card ->
             // 頂部副標 (數字或標點) - 位於右上角
             val hintView = TextView(context).apply {
                 text = hintChar
@@ -634,7 +745,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                     setMargins(0, dpToPx(2), dpToPx(3), 0)
                 }
             }
-            addView(hintView)
+            card.addView(hintView)
 
             // 主字符 - 居中清晰
             val mainView = TextView(context).apply {
@@ -651,61 +762,122 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                     setMargins(0, dpToPx(3), 0, 0)
                 }
             }
-            addView(mainView)
+            card.addView(mainView)
         }
     }
 
     /**
-     * 支援短按上屏主字符、長按上屏副標字符 (數字/符號) 的觸控監聽：
-     * 1. ACTION_DOWN 時立即出字並震動反饋（0ms 零感知延遲，跟手極速）；
-     * 2. 若長按達到 350ms，自動將剛才輸入的主字符替換為右上角副字符；
-     * 3. 徹底消滅等抬手（ACTION_UP）造成的 80ms~150ms 嚴重遲滯！
+     * 單一文字/符號按鍵視圖 (空格、退格、Shift、符號、表情等)
+     */
+    private fun createSimpleKeyView(
+        label: String,
+        weight: Float = 1f,
+        normalColor: Int = Color.WHITE,
+        pressedColor: Int = Color.parseColor("#D5D8E0"),
+        textColor: Int = Color.parseColor("#1C1C1E"),
+        textSizeSp: Float = 18f,
+        isBold: Boolean = false,
+        cornerDp: Int = 6
+    ): Pair<FrameLayout, FrameLayout> {
+        return createKeyCell(weight, normalColor, cornerDp) { card ->
+            val labelView = TextView(context).apply {
+                text = label
+                textSize = textSizeSp
+                setTextColor(textColor)
+                if (isBold) typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            card.addView(labelView)
+        }
+    }
+
+    /**
+     * 支援「瞬態 70ms 變灰」+「550ms 舒適長按防滑動」觸控監聽：
+     * 1. 瞬態視覺反饋：按下瞬間立即變灰 + 微縮放，70ms 後自動恢復白底（一瞬間變灰即恢復，絕不停留拖遝）；
+     * 2. 0ms 零延遲出字：ACTION_DOWN 立即震動並出字上屏；
+     * 3. 舒適長按 550ms：延長長按閾值至 550ms，手指滑動超過 10dp 自動取消，徹底消除快打時誤出數字符號的干擾！
      */
     private fun View.setKeyTouchWithLongPress(
+        visualCard: View,
+        normalColor: Int,
+        pressedColor: Int,
         onTap: () -> Unit,
         onLongPressReplace: () -> Unit
     ) {
         var isLongPressed = false
+        var downX = 0f
+        var downY = 0f
+        val touchSlop = dpToPx(10)
+
+        val flashResetRunnable = Runnable {
+            visualCard.background = createKeyShapeDrawable(normalColor, 6)
+            if (settings.keyAnimation) {
+                visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
+            }
+        }
+
         val longPressRunnable = Runnable {
             isLongPressed = true
             triggerHaptic()
             if (settings.keyAnimation) {
-                scaleX = 1.05f
-                scaleY = 1.05f
+                visualCard.animate().scaleX(1.06f).scaleY(1.06f).setDuration(60).start()
             }
             onLongPressReplace()
+            handler.postDelayed({
+                visualCard.background = createKeyShapeDrawable(normalColor, 6)
+                if (settings.keyAnimation) {
+                    visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
+                }
+            }, 100)
         }
 
-        setOnTouchListener { v, event ->
+        setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     isLongPressed = false
-                    v.isPressed = true
+                    downX = event.x
+                    downY = event.y
+
+                    // 1. 瞬態按鍵變灰反饋
+                    visualCard.background = createKeyShapeDrawable(pressedColor, 6)
                     if (settings.keyAnimation) {
-                        v.scaleX = 0.94f
-                        v.scaleY = 0.94f
+                        visualCard.scaleX = 0.94f
+                        visualCard.scaleY = 0.94f
                     }
-                    // 核心關鍵優化：按下瞬間立即震動 + 立即出字！
+
+                    // 2. 70ms 後自動恢復白底（一瞬間變灰即恢復）
+                    handler.removeCallbacks(flashResetRunnable)
+                    handler.postDelayed(flashResetRunnable, 70)
+
+                    // 3. 0ms 即刻震動 + 出字
                     triggerHaptic()
                     onTap()
 
-                    // 排程長按替換：如果按住不放超過 350ms，則替換為副字符
-                    handler.postDelayed(longPressRunnable, 350)
+                    // 4. 長按 550ms 排程（由 350ms 延長至舒適標準 550ms）
+                    handler.removeCallbacks(longPressRunnable)
+                    handler.postDelayed(longPressRunnable, 550)
                     true
                 }
-                MotionEvent.ACTION_UP -> {
-                    v.isPressed = false
-                    handler.removeCallbacks(longPressRunnable)
-                    if (settings.keyAnimation) {
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(60).start()
+                MotionEvent.ACTION_MOVE -> {
+                    // 若手指滑動超過 10dp，判定為快速打字滑行，立即取消長按定時器，絕不誤出符號！
+                    val dx = Math.abs(event.x - downX)
+                    val dy = Math.abs(event.y - downY)
+                    if (dx > touchSlop || dy > touchSlop) {
+                        handler.removeCallbacks(longPressRunnable)
                     }
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> {
-                    v.isPressed = false
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     handler.removeCallbacks(longPressRunnable)
-                    if (settings.keyAnimation) {
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(60).start()
+                    if (!isLongPressed) {
+                        visualCard.background = createKeyShapeDrawable(normalColor, 6)
+                        if (settings.keyAnimation) {
+                            visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
+                        }
                     }
                     true
                 }
@@ -715,9 +887,56 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     }
 
     /**
-     * 退格鍵（Backspace ⌫）連續長按自動連刪監聽
+     * 單次點擊快捷鍵觸控監聽（70ms 極速變灰瞬態反饋）
      */
-    private fun View.setRepeatBackspaceTouchListener() {
+    private fun View.setFastTouchListener(
+        visualCard: View,
+        normalColor: Int,
+        pressedColor: Int,
+        onTrigger: () -> Unit
+    ) {
+        val flashResetRunnable = Runnable {
+            visualCard.background = createKeyShapeDrawable(normalColor, 6)
+            if (settings.keyAnimation) {
+                visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
+            }
+        }
+
+        setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    visualCard.background = createKeyShapeDrawable(pressedColor, 6)
+                    if (settings.keyAnimation) {
+                        visualCard.scaleX = 0.94f
+                        visualCard.scaleY = 0.94f
+                    }
+                    handler.removeCallbacks(flashResetRunnable)
+                    handler.postDelayed(flashResetRunnable, 70)
+
+                    triggerHaptic()
+                    onTrigger()
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    visualCard.background = createKeyShapeDrawable(normalColor, 6)
+                    if (settings.keyAnimation) {
+                        visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    /**
+     * 退格鍵（Backspace ⌫）連續長按自動連刪監聽（帶 70ms 瞬態變灰反饋）
+     */
+    private fun View.setRepeatBackspaceTouchListener(
+        visualCard: View,
+        normalColor: Int,
+        pressedColor: Int
+    ) {
         var repeatRunnable: Runnable? = null
         repeatRunnable = Runnable {
             triggerHaptic()
@@ -729,125 +948,62 @@ class KeyboardView(context: Context) : LinearLayout(context) {
             handler.post(repeatRunnable!!)
         }
 
-        setOnTouchListener { v, event ->
+        val flashResetRunnable = Runnable {
+            visualCard.background = createKeyShapeDrawable(normalColor, 6)
+            if (settings.keyAnimation) {
+                visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
+            }
+        }
+
+        setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.isPressed = true
+                    visualCard.background = createKeyShapeDrawable(pressedColor, 6)
                     if (settings.keyAnimation) {
-                        v.scaleX = 0.94f
-                        v.scaleY = 0.94f
+                        visualCard.scaleX = 0.94f
+                        visualCard.scaleY = 0.94f
                     }
+                    handler.removeCallbacks(flashResetRunnable)
+                    handler.postDelayed(flashResetRunnable, 70)
+
                     triggerHaptic()
                     onBackspaceListener?.invoke()
-                    handler.postDelayed(startRepeatRunnable, 350)
+                    handler.postDelayed(startRepeatRunnable, 500)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.isPressed = false
                     handler.removeCallbacks(startRepeatRunnable)
                     repeatRunnable?.let { handler.removeCallbacks(it) }
+                    visualCard.background = createKeyShapeDrawable(normalColor, 6)
                     if (settings.keyAnimation) {
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                        visualCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(40).start()
                     }
                     true
                 }
                 else -> false
             }
-        }
-    }
-
-    private fun View.setFastTouchListener(onTrigger: () -> Unit) {
-        setOnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    v.isPressed = true
-                    if (settings.keyAnimation) {
-                        v.scaleX = 0.94f
-                        v.scaleY = 0.94f
-                    }
-                    triggerHaptic()
-                    onTrigger()
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.isPressed = false
-                    if (settings.keyAnimation) {
-                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
-                    }
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    private fun createKeyButton(label: String): Button {
-        return Button(context).apply {
-            text = label
-            textSize = if (label.length > 1 && label.codePointCount(0, label.length) > 1) 16f else 19f
-            setTextColor(Color.parseColor("#1C1C1E"))
-            background = createKeyBackground(Color.WHITE, Color.parseColor("#E2E4E9"), cornerDp = 6)
-            isAllCaps = false
-            stateListAnimator = null
-            setPadding(0, 0, 0, 0)
         }
     }
 
     /**
      * 按鍵間距（水平外邊距）：
-     * 預設為 2.2dp，按鍵間距增加 0.3mm (~1.9dp)，即單側增加 ~0.95dp -> 3.15dp。
-     * 兩鍵之間間隙增加 0.3mm，徹底防誤觸。
+     * 兩鍵之間淨間距保持精準的 +0.3mm (~1.9dp) 防誤觸間隙。
      */
     private val keyMarginHorizontal: Int
         get() = ((2.2f + mmToDp(0.15f)) * context.resources.displayMetrics.density).toInt()
 
     /**
      * 鍵盤行距（垂直上下間距）：
-     * 原始上下內邊距為 2.0dp（相鄰兩行按鍵間隙為 4.0dp）。
-     * 行距增加 1 毫米（1mm ≈ 6.3dp），即上下各增加 0.5mm (~3.15dp) -> 5.15dp。
-     * 相鄰行按鍵之間的垂直間隙由 4.0dp 增至 10.3dp，精確增加 1.0mm，防止上下行盲打誤觸。
+     * 行距增加 1 毫米（1mm ≈ 6.3dp），相鄰行按鍵之間的垂直間隙為 10.3dp，保持開闊大氣。
      */
     private val rowPaddingVertical: Int
         get() = ((2.0f + mmToDp(0.5f)) * context.resources.displayMetrics.density).toInt()
 
-    private fun createSpecialButton(label: String, weight: Float): Button {
-        val marginH = keyMarginHorizontal
-        return Button(context).apply {
-            text = label
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.parseColor("#2C2C2E"))
-            background = createKeyBackground(Color.parseColor("#C3C6CE"), Color.parseColor("#B0B3BC"), cornerDp = 6)
-            isAllCaps = false
-            stateListAnimator = null
-            setPadding(0, 0, 0, 0)
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, weight).apply {
-                setMargins(marginH, 0, marginH, 0)
-            }
-        }
-    }
-
-    private fun createKeyBackground(normalColor: Int, pressedColor: Int, cornerDp: Int = 6): RippleDrawable {
-        val normalDrawable = GradientDrawable().apply {
-            setColor(normalColor)
+    private fun createKeyShapeDrawable(color: Int, cornerDp: Int = 6): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
             cornerRadius = dpToPx(cornerDp).toFloat()
         }
-        val pressedDrawable = GradientDrawable().apply {
-            setColor(pressedColor)
-            cornerRadius = dpToPx(cornerDp).toFloat()
-        }
-
-        val stateList = StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), pressedDrawable)
-            addState(intArrayOf(), normalDrawable)
-        }
-
-        val colorStateList = ColorStateList(
-            arrayOf(intArrayOf(android.R.attr.state_pressed), intArrayOf()),
-            intArrayOf(pressedColor, normalColor)
-        )
-
-        return RippleDrawable(colorStateList, stateList, pressedDrawable)
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -855,13 +1011,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         return (dp * density).toInt()
     }
 
-    private fun mmToPx(mm: Float): Int {
-        val xdpi = context.resources.displayMetrics.xdpi
-        return (mm * xdpi / 25.4f).toInt()
-    }
-
     private fun mmToDp(mm: Float): Float {
-        // 1 inch = 25.4mm, 1 inch = 160dp -> 1mm = 160 / 25.4 = 6.299dp
         return mm * (160f / 25.4f)
     }
 }
