@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -32,18 +33,22 @@ class KeyboardToolbarView(context: Context) : LinearLayout(context) {
     init {
         orientation = HORIZONTAL
         setBackgroundColor(Color.parseColor("#EEF0F3"))
-        setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3))
+        setPadding(dpToPx(8), 0, dpToPx(8), 0)
         gravity = Gravity.CENTER_VERTICAL
 
         val scrollView = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         }
 
         val container = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
 
         // 1. 輸出外語翻譯開關（打開時輸出翻譯語言，關閉時輸出中文）

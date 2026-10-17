@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.wai.ime.core.Candidate
 import com.wai.ime.core.CandidateResult
@@ -31,6 +32,7 @@ import com.wai.ime.ui.MainActivity
 class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
     private lateinit var rootView: LinearLayout
+    private lateinit var headerContainer: FrameLayout
     private lateinit var toolbarView: KeyboardToolbarView
     private lateinit var candidateBarView: CandidateBarView
     private lateinit var keyboardView: KeyboardView
@@ -62,11 +64,23 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             )
         }
 
-        // 1. 頂部工具欄 (功能欄目：語言切換、繁簡切換、表情、設置)
-        toolbarView = KeyboardToolbarView(this).apply {
+        // 頂部固定高度容器 (44dp)：
+        // 未輸入文字時顯示功能按鈕欄 (Toolbar)；
+        // 開始輸入文字時，文字候選欄 (CandidateBar) 自動覆蓋/隱藏功能欄，
+        // 嚴格保證輸入法頂部高度絕對固定，徹底解決高度動態變形導致宿主 App 介面抖動的問題！
+        val headerHeightPx = (44 * resources.displayMetrics.density).toInt()
+        headerContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                headerHeightPx
+            )
+        }
+
+        // 1. 頂部工具欄 (功能欄目：語言切換、繁簡切換、表情、設置)
+        toolbarView = KeyboardToolbarView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
             onLanguageClick = {
                 showLanguageSwitchDialog()
@@ -88,20 +102,23 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
                 startActivity(intent)
             }
         }
-        rootView.addView(toolbarView)
+        headerContainer.addView(toolbarView)
 
         // 2. 雙語候選欄 (中文 + 外語釋義/假名)
         candidateBarView = CandidateBarView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
+            visibility = View.GONE
             candidateFontSize = settings.candidateFontSize.toFloat()
             onCandidateClickListener = { index ->
                 commitCandidateByIndex(index)
             }
         }
-        rootView.addView(candidateBarView)
+        headerContainer.addView(candidateBarView)
+
+        rootView.addView(headerContainer)
 
         // 3. 底部鍵盤區域 (含逗號、句號、中英切換、以及底欄地球圖標切換輸入法)
         val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
@@ -222,11 +239,13 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             if (::candidateBarView.isInitialized) {
                 candidateBarView.updateState("", emptyList())
             }
+            updateHeaderMode(false)
         } else {
             currentCandidates = result.candidates
             if (::candidateBarView.isInitialized) {
                 candidateBarView.updateState(result.preedit.ifEmpty { localPreedit }, currentCandidates)
             }
+            updateHeaderMode(true)
         }
     }
 
@@ -242,8 +261,10 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
                 if (::candidateBarView.isInitialized) {
                     candidateBarView.updateState("", emptyList())
                 }
+                updateHeaderMode(false)
                 currentInputConnection?.finishComposingText()
             } else {
+                updateHeaderMode(true)
                 currentInputConnection?.setComposingText(localPreedit, 1)
             }
         }
@@ -263,6 +284,7 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
             // 1. 本地立即更新拼音狀態（T0 -> T1，< 0.1ms）
             localPreedit += ch
+            updateHeaderMode(true)
             val t1 = System.nanoTime()
 
             // 候選條頂部預編輯區立即刷新顯示拼音（0ms 零延遲反饋給用戶）
@@ -317,12 +339,14 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
                     if (::candidateBarView.isInitialized) {
                         candidateBarView.updatePreeditOnly(localPreedit)
                     }
+                    updateHeaderMode(true)
                 } else {
                     currentInputConnection?.commitText("", 1)
                     currentCandidates = emptyList()
                     if (::candidateBarView.isInitialized) {
                         candidateBarView.updateState("", emptyList())
                     }
+                    updateHeaderMode(false)
                 }
             }
             currentInputConnection?.commitText(replacementKey, 1)
@@ -342,10 +366,12 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             localPreedit = localPreedit.dropLast(1)
             if (localPreedit.isNotEmpty()) {
                 currentInputConnection?.setComposingText(localPreedit, 1)
+                updateHeaderMode(true)
             } else {
                 currentInputConnection?.commitText("", 1)
                 currentCandidates = emptyList()
                 candidateBarView.updateState("", emptyList())
+                updateHeaderMode(false)
             }
             dispatcher.enqueueBackspace()
         } else {
@@ -496,6 +522,31 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
         }
     }
 
+    /**
+     * 統一控制頂部固定容器 (44dp) 顯示模式：
+     * - 當正在輸入拼音或有候選字詞時：候選字欄顯示，覆蓋/隱藏功能按鈕欄；
+     * - 當未輸入文字（空閒狀態）時：恢復顯示功能按鈕欄 (Toolbar)。
+     * 確保整個輸入法視圖高度 100% 絕對固定，徹底根除宿主 App 介面被頂動抖動！
+     */
+    private fun updateHeaderMode(isComposing: Boolean) {
+        if (!::toolbarView.isInitialized || !::candidateBarView.isInitialized) return
+        if (isComposing) {
+            if (candidateBarView.visibility != View.VISIBLE) {
+                candidateBarView.visibility = View.VISIBLE
+            }
+            if (toolbarView.visibility != View.GONE) {
+                toolbarView.visibility = View.GONE
+            }
+        } else {
+            if (toolbarView.visibility != View.VISIBLE) {
+                toolbarView.visibility = View.VISIBLE
+            }
+            if (candidateBarView.visibility != View.GONE) {
+                candidateBarView.visibility = View.GONE
+            }
+        }
+    }
+
     private fun commitCandidateByIndex(index: Int) {
         if (index in currentCandidates.indices) {
             // 空格或按鍵選中候選詞時，同樣觸發選詞震動反饋
@@ -514,6 +565,7 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
         if (::candidateBarView.isInitialized) {
             candidateBarView.updateState("", emptyList())
         }
+        updateHeaderMode(false)
         currentInputConnection?.finishComposingText()
         if (::dispatcher.isInitialized) {
             dispatcher.enqueueClear()

@@ -45,21 +45,22 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        setBackgroundColor(Color.parseColor("#F5F5F7"))
-        setPadding(dpToPx(6), dpToPx(3), dpToPx(6), dpToPx(3))
+        setBackgroundColor(Color.parseColor("#EEF0F3"))
+        setPadding(dpToPx(6), dpToPx(1), dpToPx(6), dpToPx(1))
 
-        // 頂部拼音顯示（固定佔位高度，使用 INVISIBLE 避免切換時高度劇烈跳變引發鍵盤晃動閃爍）
+        // 頂部拼音顯示（固定高度 16dp，杜絕任何高度抖動）
         preeditView = TextView(context).apply {
-            textSize = 13f
+            textSize = 12f
             setTextColor(Color.parseColor("#007AFF"))
             typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
             visibility = View.INVISIBLE
-            setPadding(dpToPx(8), dpToPx(2), dpToPx(8), dpToPx(2))
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(22))
+            setPadding(dpToPx(8), dpToPx(1), dpToPx(8), 0)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(16))
         }
         addView(preeditView)
 
-        // 水平滾動候選區
+        // 水平滾動候選區 (以 weight=1f 填滿固定容器的剩餘高度)
         scrollView = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -74,12 +75,12 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             candidateContainer,
             ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
         addView(
             scrollView,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
         )
     }
 
@@ -166,7 +167,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         val itemLayout = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dpToPx(12), dpToPx(3), dpToPx(12), dpToPx(3))
+            setPadding(dpToPx(12), dpToPx(1), dpToPx(12), dpToPx(1))
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
@@ -176,6 +177,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             textSize = candidateFontSize
             setTextColor(Color.parseColor("#1C1C1E"))
             typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
         }
         itemLayout.addView(chineseText)
 
@@ -183,6 +185,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
             setTextColor(Color.parseColor("#8E8E93"))
             maxLines = 1
+            includeFontPadding = false
         }
         itemLayout.addView(foreignText)
 
