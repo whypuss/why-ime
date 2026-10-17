@@ -48,6 +48,15 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     var onHideKeyboardListener: (() -> Unit)? = null
     var onEnglishModeToggleListener: ((Boolean) -> Unit)? = null
 
+    /** 是否需要顯示底部切換輸入法導航欄（根據系統導航模式與用戶設定智能判斷） */
+    var shouldShowBottomNavBar: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                renderKeyboard()
+            }
+        }
+
     var currentMode = KeyboardMode.TEXT
         private set
 
@@ -126,8 +135,11 @@ class KeyboardView(context: Context) : LinearLayout(context) {
 
         addView(keysContainer)
 
-        // 底部獨立切換輸入法欄（地球圖標 + 收起鍵盤圖標）
-        addView(createBottomNavBar())
+        // 底部獨立切換輸入法欄（地球圖標 + 收起鍵盤圖標）：
+        // 若系統導航欄（或全面屏手勢鍵盤下沉區域）已內建切換按鈕，智能隱藏此欄，杜絕界面重複冗餘
+        if (shouldShowBottomNavBar) {
+            addView(createBottomNavBar())
+        }
     }
 
     // ================= 1. 拼音/字母 鍵盤 (雙層按鍵 + 舒適長按) =================

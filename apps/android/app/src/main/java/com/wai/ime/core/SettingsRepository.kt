@@ -34,6 +34,16 @@ class SettingsRepository private constructor(context: Context) {
         get() = prefs.getInt("keyboard_height_dp", 270) // 240 (矮), 270 (標準/適配行距+1mm), 295 (大屏/高鍵盤)
         set(value) = prefs.edit().putInt("keyboard_height_dp", value).apply()
 
+    /**
+     * 底部切換輸入法/收起鍵盤導航欄顯示模式：
+     * "auto": 自動偵測（當系統導航欄已有切換按鍵時自動隱藏，避免重複）
+     * "hide": 始終隱藏（最大化鍵盤面積，推薦）
+     * "show": 始終顯示
+     */
+    var bottomNavBarMode: String
+        get() = prefs.getString("bottom_nav_bar_mode", "auto") ?: "auto"
+        set(value) = prefs.edit().putString("bottom_nav_bar_mode", value).apply()
+
     // 語言與學習目標 (目前支援日語 "ja")
     var targetLanguage: String
         get() = prefs.getString("target_language", "ja") ?: "ja"
