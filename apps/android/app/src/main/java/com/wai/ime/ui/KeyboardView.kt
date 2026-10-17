@@ -605,7 +605,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         val navBar = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(34)).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(settings.bottomSpacingDp)).apply {
                 setMargins(0, dpToPx(2), 0, 0)
             }
             setBackgroundColor(Color.TRANSPARENT)
@@ -720,7 +720,7 @@ class KeyboardView(context: Context) : LinearLayout(context) {
         }
 
         val marginH = keyMarginHorizontal
-        val marginV = (rowPaddingVertical / 2).coerceAtLeast(dpToPx(1))
+        val marginV = ((rowPaddingVertical / 2) + keyLengthReductionMarginV).coerceAtLeast(dpToPx(1))
 
         val visualCard = FrameLayout(context).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -1001,18 +1001,25 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     }
 
     /**
-     * 按鍵間距（水平外邊距）：
-     * 兩鍵之間淨間距保持精準的 +0.3mm (~1.9dp) 防誤觸間隙。
+     * 按鍵水平間距（鍵距再增加 0.5 毫米）：
+     * 兩鍵之間淨間距再增加 0.5mm，左右各擴增 0.25mm，徹底杜絕橫向手指誤觸。
      */
     private val keyMarginHorizontal: Int
-        get() = ((2.2f + mmToDp(0.15f)) * context.resources.displayMetrics.density).toInt()
+        get() = ((2.2f + mmToDp(0.40f)) * context.resources.displayMetrics.density).toInt()
 
     /**
-     * 鍵盤行距（垂直上下間距）：
-     * 行距增加 1 毫米（1mm ≈ 6.3dp），相鄰行按鍵之間的垂直間隙為 10.3dp，保持開闊大氣。
+     * 鍵盤行距（行距再增加 1 毫米）：
+     * 相鄰行按鍵之間的垂直間隙再增加 1mm，視覺與觸摸更開闊大氣。
      */
     private val rowPaddingVertical: Int
-        get() = ((2.0f + mmToDp(0.5f)) * context.resources.displayMetrics.density).toInt()
+        get() = ((2.0f + mmToDp(1.5f)) * context.resources.displayMetrics.density).toInt()
+
+    /**
+     * 按鍵長度（高度）減少 0.5 毫米：
+     * 上下外邊距各收縮 0.25mm，使按鍵視覺長度（垂直高度）精確減少 0.5mm。
+     */
+    private val keyLengthReductionMarginV: Int
+        get() = ((mmToDp(0.25f)) * context.resources.displayMetrics.density).toInt()
 
     private fun createKeyShapeDrawable(color: Int, cornerDp: Int = 6): GradientDrawable {
         return GradientDrawable().apply {

@@ -31,8 +31,16 @@ class SettingsRepository private constructor(context: Context) {
         set(value) = prefs.edit().putInt("candidate_font_size", value).apply()
 
     var keyboardHeightDp: Int
-        get() = prefs.getInt("keyboard_height_dp", 270) // 240 (矮), 270 (標準/適配行距+1mm), 295 (大屏/高鍵盤)
+        get() = prefs.getInt("keyboard_height_dp", 280) // 250 (緊湊), 280 (標準抬升), 305 (大屏高鍵盤)
         set(value) = prefs.edit().putInt("keyboard_height_dp", value).apply()
+
+    /**
+     * 鍵盤底部下沉留白/抬升間距 (dp):
+     * 預設 64dp，將鍵盤按鍵整體顯著往上抬升，徹底為系統全面屏手勢條、系統原生地球/收起鍵盤按鈕留出充足空間，絕不遮擋！
+     */
+    var bottomSpacingDp: Int
+        get() = prefs.getInt("bottom_spacing_dp", 64) // 44 (緊湊), 64 (標準抬升防遮擋), 78 (大抬升), 92 (超大抬升)
+        set(value) = prefs.edit().putInt("bottom_spacing_dp", value).apply()
 
     /**
      * 底部切換輸入法/收起鍵盤圖標顯示模式：

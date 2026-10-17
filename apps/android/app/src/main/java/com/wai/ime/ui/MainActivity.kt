@@ -287,8 +287,8 @@ class MainActivity : AppCompatActivity() {
         addDivider(card)
 
         // 鍵盤高度
-        val heightLabels = arrayOf("矮鍵盤 (240dp)", "標準/適配行距 (270dp)", "高鍵盤 (295dp)")
-        val heights = arrayOf(240, 270, 295)
+        val heightLabels = arrayOf("矮鍵盤 (250dp)", "標準/適配行距與抬升 (280dp)", "高鍵盤 (305dp)")
+        val heights = arrayOf(250, 280, 305)
         val currentHeightIndex = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
 
         card.addView(createClickableRow("鍵盤高度調節", heightLabels[currentHeightIndex]) { summaryView ->
@@ -298,6 +298,26 @@ class MainActivity : AppCompatActivity() {
                 .setSingleChoiceItems(heightLabels, checked) { dialog, which ->
                     settings.keyboardHeightDp = heights[which]
                     summaryView.text = heightLabels[which]
+                    dialog.dismiss()
+                }
+                .setNegativeButton("取消", null)
+                .show()
+        })
+
+        addDivider(card)
+
+        // 鍵盤往上抬升/底部間距調節
+        val spacingLabels = arrayOf("緊湊 (44dp)", "標準防遮擋抬升 (64dp)", "大抬升 (78dp)", "超大抬升 (92dp)")
+        val spacings = arrayOf(44, 64, 78, 92)
+        val currentSpacingIndex = spacings.indexOf(settings.bottomSpacingDp).let { if (it >= 0) it else 1 }
+
+        card.addView(createClickableRow("鍵盤底部抬升間距", spacingLabels[currentSpacingIndex]) { summaryView ->
+            val checked = spacings.indexOf(settings.bottomSpacingDp).let { if (it >= 0) it else 1 }
+            AlertDialog.Builder(this)
+                .setTitle("選擇鍵盤底部抬升間距")
+                .setSingleChoiceItems(spacingLabels, checked) { dialog, which ->
+                    settings.bottomSpacingDp = spacings[which]
+                    summaryView.text = spacingLabels[which]
                     dialog.dismiss()
                 }
                 .setNegativeButton("取消", null)
