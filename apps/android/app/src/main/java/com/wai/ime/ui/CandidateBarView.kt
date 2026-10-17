@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -14,15 +15,25 @@ import com.wai.ime.core.SettingsRepository
 import com.wai.ime.core.VibrationHelper
 
 /**
- * 候選詞條視圖（展示拼音、候選字、以及即時對照的日語假名和釋義）
+ * 候選詞條視圖（展示拼音、候選字、即時對照的外語假名/釋義、以及右側展開按鈕）
  */
 class CandidateBarView(context: Context) : LinearLayout(context) {
 
     private val preeditView: TextView
+    private val candidateRowLayout: LinearLayout
     private val scrollView: HorizontalScrollView
     private val candidateContainer: LinearLayout
+    private val expandArrowButton: TextView
 
     var onCandidateClickListener: ((Int) -> Unit)? = null
+    var onExpandToggleListener: (() -> Unit)? = null
+
+    var isExpanded: Boolean = false
+        set(value) {
+            field = value
+            expandArrowButton.text = if (value) "▲" else "▼"
+        }
+
     var candidateFontSize: Float = 18f
         set(value) {
             field = value
@@ -46,7 +57,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.parseColor("#EEF0F3"))
-        setPadding(dpToPx(6), dpToPx(1), dpToPx(6), dpToPx(1))
+        setPadding(dpToPx(4), dpToPx(1), dpToPx(2), dpToPx(1))
 
         // 頂部拼音顯示（固定高度 18dp，杜絕任何高度抖動）
         preeditView = TextView(context).apply {
@@ -60,7 +71,14 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         }
         addView(preeditView)
 
-        // 水平滾動候選區 (以 weight=1f 填滿固定容器的剩餘高度)
+        // 候選條主橫向行（包含左側滑動候選區與右側下拉選字箭頭按鈕）
+        candidateRowLayout = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+        }
+
+        // 水平滾動候選區
         scrollView = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -78,10 +96,30 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        addView(
+
+        candidateRowLayout.addView(
             scrollView,
-            LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
         )
+
+        // 右側展開下拉列表選字按鈕（小巧緊湊，優雅居中）
+        expandArrowButton = TextView(context).apply {
+            text = "▼"
+            textSize = 11f
+            setTextColor(Color.parseColor("#636366"))
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            layoutParams = LayoutParams(dpToPx(32), LayoutParams.MATCH_PARENT)
+            setOnClickListener {
+                VibrationHelper.vibrate(context, this, settings, isCandidateSelect = false)
+                onExpandToggleListener?.invoke()
+            }
+        }
+        candidateRowLayout.addView(expandArrowButton)
+
+        addView(candidateRowLayout)
     }
 
     /**
@@ -103,7 +141,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
     }
 
     /**
-     * 更新候選條狀態（採用 ViewHolder 複用，零 GC 延遲極速刷新）
+     * 更新候選條狀態（移除數字序號、精確緊湊間距、複用 ViewHolder 零 GC 延遲）
      */
     fun updateState(preedit: String, candidates: List<Candidate>) {
         lastPreedit = preedit
@@ -136,13 +174,14 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             val candidate = candidates[i]
             val vh = viewPool[i]
 
-            vh.chineseText.text = "${i + 1}. ${candidate.text}"
+            // 去除手機上多餘的 "1. ", "2. " 數字序號，直接顯示文字
+            vh.chineseText.text = candidate.text
             vh.chineseText.textSize = candidateFontSize
 
             val foreignLabel = candidate.formatJapaneseLabel()
             if (foreignLabel != null) {
                 vh.foreignText.text = foreignLabel
-                vh.foreignText.textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
+                vh.foreignText.textSize = (candidateFontSize * 0.62f).coerceAtLeast(10f)
                 vh.foreignText.visibility = View.VISIBLE
             } else {
                 vh.foreignText.visibility = View.GONE
@@ -167,7 +206,8 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         val itemLayout = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dpToPx(12), dpToPx(1), dpToPx(12), dpToPx(1))
+            // 緊湊間距：左右各 7dp，杜絕過大間隙
+            setPadding(dpToPx(7), dpToPx(1), dpToPx(7), dpToPx(1))
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true

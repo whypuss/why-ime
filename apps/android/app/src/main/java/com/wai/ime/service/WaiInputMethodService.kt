@@ -21,6 +21,7 @@ import com.wai.ime.core.SettingsRepository
 import com.wai.ime.core.VibrationHelper
 import com.wai.ime.core.WaiNativeEngine
 import com.wai.ime.ui.CandidateBarView
+import com.wai.ime.ui.CandidateExpandView
 import com.wai.ime.ui.KeyboardToolbarView
 import com.wai.ime.ui.KeyboardView
 import com.wai.ime.ui.MainActivity
@@ -35,6 +36,7 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
     private lateinit var headerContainer: FrameLayout
     private lateinit var toolbarView: KeyboardToolbarView
     private lateinit var candidateBarView: CandidateBarView
+    private lateinit var candidateExpandView: CandidateExpandView
     private lateinit var keyboardView: KeyboardView
     private lateinit var settings: SettingsRepository
     private lateinit var dispatcher: EngineDispatcher
@@ -116,17 +118,28 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             onCandidateClickListener = { index ->
                 commitCandidateByIndex(index)
             }
+            onExpandToggleListener = {
+                toggleCandidateExpand()
+            }
         }
         headerContainer.addView(candidateBarView)
 
         rootView.addView(headerContainer)
 
-        // 3. 底部鍵盤區域 (含逗號、句號、中英切換、以及底欄地球圖標切換輸入法)
+        // 3. 鍵盤與下拉候選字網格共享的下部容器 (FrameLayout)
         val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
-        keyboardView = KeyboardView(this).apply {
+        val contentContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 heightInPx
+            )
+        }
+
+        // 3.1 底部鍵盤區域 (含逗號、句號、中英切換、以及底欄地球圖標切換輸入法)
+        keyboardView = KeyboardView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
             onKeyClickListener = { key ->
                 handleKeyInput(key)
@@ -158,7 +171,24 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
                 }
             }
         }
-        rootView.addView(keyboardView)
+        contentContainer.addView(keyboardView)
+
+        // 3.2 展開式候選字下拉網格列表 (覆蓋於鍵盤之上，按箭頭展開選字)
+        candidateExpandView = CandidateExpandView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            visibility = View.GONE
+            candidateFontSize = settings.candidateFontSize.toFloat()
+            onCandidateClickListener = { index ->
+                collapseCandidateExpand()
+                commitCandidateByIndex(index)
+            }
+        }
+        contentContainer.addView(candidateExpandView)
+
+        rootView.addView(contentContainer)
 
         return rootView
     }
@@ -178,11 +208,14 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
         toolbarView.setEmojiActive(keyboardView.currentMode == com.wai.ime.ui.KeyboardMode.EMOJI)
 
         candidateBarView.candidateFontSize = settings.candidateFontSize.toFloat()
+        candidateExpandView.candidateFontSize = settings.candidateFontSize.toFloat()
         val heightInPx = (settings.keyboardHeightDp * resources.displayMetrics.density).toInt()
-        keyboardView.layoutParams = (keyboardView.layoutParams as LinearLayout.LayoutParams).apply {
+        val contentContainer = keyboardView.parent as? View
+        contentContainer?.layoutParams = (contentContainer?.layoutParams as? LinearLayout.LayoutParams)?.apply {
             height = heightInPx
         }
         keyboardView.shouldShowBottomIcons = resolveShouldShowBottomIcons()
+        collapseCandidateExpand()
         resetComposing()
         // 關鍵防閃爍修復：只有全新彈出鍵盤時才完整重構鍵盤；如果是輸入過程中的 restarting 回調，絕對不可重建！
         if (!restarting) {
@@ -240,11 +273,18 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             if (::candidateBarView.isInitialized) {
                 candidateBarView.updateState("", emptyList())
             }
+            if (::candidateExpandView.isInitialized) {
+                candidateExpandView.setCandidates(emptyList())
+            }
+            collapseCandidateExpand()
             updateHeaderMode(false)
         } else {
             currentCandidates = result.candidates
             if (::candidateBarView.isInitialized) {
                 candidateBarView.updateState(result.preedit.ifEmpty { localPreedit }, currentCandidates)
+            }
+            if (::candidateExpandView.isInitialized) {
+                candidateExpandView.setCandidates(currentCandidates)
             }
             updateHeaderMode(true)
         }
@@ -631,13 +671,45 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
     private fun resetComposing() {
         localPreedit = ""
         currentCandidates = emptyList()
+        collapseCandidateExpand()
         if (::candidateBarView.isInitialized) {
             candidateBarView.updateState("", emptyList())
+        }
+        if (::candidateExpandView.isInitialized) {
+            candidateExpandView.setCandidates(emptyList())
         }
         updateHeaderMode(false)
         currentInputConnection?.finishComposingText()
         if (::dispatcher.isInitialized) {
             dispatcher.enqueueClear()
+        }
+    }
+
+    /**
+     * 切換展開式候選字下拉列表（覆蓋在鍵盤上方）
+     */
+    private fun toggleCandidateExpand() {
+        if (!::candidateExpandView.isInitialized || !::keyboardView.isInitialized || !::candidateBarView.isInitialized) return
+        val willExpand = candidateExpandView.visibility != View.VISIBLE
+        if (willExpand) {
+            candidateExpandView.setCandidates(currentCandidates)
+            candidateExpandView.visibility = View.VISIBLE
+            keyboardView.visibility = View.INVISIBLE
+            candidateBarView.isExpanded = true
+        } else {
+            collapseCandidateExpand()
+        }
+    }
+
+    /**
+     * 收起展開式候選字下拉列表，恢復鍵盤顯示
+     */
+    private fun collapseCandidateExpand() {
+        if (!::candidateExpandView.isInitialized || !::keyboardView.isInitialized) return
+        candidateExpandView.visibility = View.GONE
+        keyboardView.visibility = View.VISIBLE
+        if (::candidateBarView.isInitialized) {
+            candidateBarView.isExpanded = false
         }
     }
 }
