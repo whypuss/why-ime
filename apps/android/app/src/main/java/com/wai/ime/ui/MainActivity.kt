@@ -287,8 +287,8 @@ class MainActivity : AppCompatActivity() {
         addDivider(card)
 
         // 鍵盤高度
-        val heightLabels = arrayOf("矮鍵盤 (250dp)", "標準/適配行距與抬升 (280dp)", "高鍵盤 (305dp)")
-        val heights = arrayOf(250, 280, 305)
+        val heightLabels = arrayOf("矮鍵盤 (238dp)", "標準舒適 (262dp)", "高鍵盤 (288dp)")
+        val heights = arrayOf(238, 262, 288)
         val currentHeightIndex = heights.indexOf(settings.keyboardHeightDp).let { if (it >= 0) it else 1 }
 
         card.addView(createClickableRow("鍵盤高度調節", heightLabels[currentHeightIndex]) { summaryView ->
@@ -307,8 +307,8 @@ class MainActivity : AppCompatActivity() {
         addDivider(card)
 
         // 鍵盤往上抬升/底部間距調節
-        val spacingLabels = arrayOf("緊湊 (44dp)", "標準防遮擋抬升 (64dp)", "大抬升 (78dp)", "超大抬升 (92dp)")
-        val spacings = arrayOf(44, 64, 78, 92)
+        val spacingLabels = arrayOf("超緊湊 (24dp)", "標準黃金比例 (38dp)", "寬鬆留白 (50dp)", "大抬升 (64dp)")
+        val spacings = arrayOf(24, 38, 50, 64)
         val currentSpacingIndex = spacings.indexOf(settings.bottomSpacingDp).let { if (it >= 0) it else 1 }
 
         card.addView(createClickableRow("鍵盤底部抬升間距", spacingLabels[currentSpacingIndex]) { summaryView ->
