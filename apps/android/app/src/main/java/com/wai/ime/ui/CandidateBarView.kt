@@ -48,7 +48,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         setBackgroundColor(Color.parseColor("#EEF0F3"))
         setPadding(dpToPx(6), dpToPx(1), dpToPx(6), dpToPx(1))
 
-        // 頂部拼音顯示（固定高度 16dp，杜絕任何高度抖動）
+        // 頂部拼音顯示（固定高度 18dp，杜絕任何高度抖動）
         preeditView = TextView(context).apply {
             textSize = 12f
             setTextColor(Color.parseColor("#007AFF"))
@@ -56,7 +56,7 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
             includeFontPadding = false
             visibility = View.INVISIBLE
             setPadding(dpToPx(8), dpToPx(1), dpToPx(8), 0)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(16))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dpToPx(18))
         }
         addView(preeditView)
 
@@ -182,10 +182,11 @@ class CandidateBarView(context: Context) : LinearLayout(context) {
         itemLayout.addView(chineseText)
 
         val foreignText = TextView(context).apply {
-            textSize = (candidateFontSize * 0.65f).coerceAtLeast(10f)
-            setTextColor(Color.parseColor("#8E8E93"))
+            textSize = (candidateFontSize * 0.62f).coerceAtLeast(10f)
+            setTextColor(Color.parseColor("#636366"))
             maxLines = 1
             includeFontPadding = false
+            setPadding(0, dpToPx(1), 0, 0)
         }
         itemLayout.addView(foreignText)
 

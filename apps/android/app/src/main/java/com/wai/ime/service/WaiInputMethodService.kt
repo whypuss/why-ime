@@ -64,11 +64,12 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             )
         }
 
-        // 頂部固定高度容器 (44dp)：
+        // 頂部固定高度容器 (60dp)：
         // 未輸入文字時顯示功能按鈕欄 (Toolbar)；
-        // 開始輸入文字時，文字候選欄 (CandidateBar) 自動覆蓋/隱藏功能欄，
-        // 嚴格保證輸入法頂部高度絕對固定，徹底解決高度動態變形導致宿主 App 介面抖動的問題！
-        val headerHeightPx = (44 * resources.displayMetrics.density).toInt()
+        // 開始輸入文字時，文字候選欄 (CandidateBar，含拼音行 + 雙語候選字與外語假名/釋義) 自動覆蓋/隱藏功能欄；
+        // 嚴格保證 60dp 充裕高度，讓中文字詞與外語翻譯/假名對照完整顯示不被遮擋裁剪，
+        // 且高度始終 100% 絕對固定，徹底解決高度動態變形導致宿主 App 介面被頂動的問題！
+        val headerHeightPx = (60 * resources.displayMetrics.density).toInt()
         headerContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -523,7 +524,7 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
     }
 
     /**
-     * 統一控制頂部固定容器 (44dp) 顯示模式：
+     * 統一控制頂部固定容器 (60dp) 顯示模式：
      * - 當正在輸入拼音或有候選字詞時：候選字欄顯示，覆蓋/隱藏功能按鈕欄；
      * - 當未輸入文字（空閒狀態）時：恢復顯示功能按鈕欄 (Toolbar)。
      * 確保整個輸入法視圖高度 100% 絕對固定，徹底根除宿主 App 介面被頂動抖動！
