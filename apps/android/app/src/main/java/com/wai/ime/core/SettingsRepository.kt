@@ -57,9 +57,9 @@ class SettingsRepository private constructor(context: Context) {
         get() = prefs.getString("target_language", "ja") ?: "ja"
         set(value) = prefs.edit().putString("target_language", value).apply()
 
-    // 常規與輸入設置
+    // 常規與輸入設置（默認繁體中文 "taiwan"）
     var traditionalVariant: String
-        get() = prefs.getString("traditional_variant", "off") ?: "off" // off, taiwan, hongkong, standard
+        get() = prefs.getString("traditional_variant", "taiwan") ?: "taiwan" // taiwan, hongkong, standard, off
         set(value) = prefs.edit().putString("traditional_variant", value).apply()
 
     var shuangpinScheme: String
