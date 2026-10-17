@@ -35,10 +35,10 @@ class SettingsRepository private constructor(context: Context) {
         set(value) = prefs.edit().putInt("keyboard_height_dp", value).apply()
 
     /**
-     * 底部切換輸入法/收起鍵盤導航欄顯示模式：
-     * "auto": 自動偵測（當系統導航欄已有切換按鍵時自動隱藏，避免重複）
-     * "hide": 始終隱藏（最大化鍵盤面積，推薦）
-     * "show": 始終顯示
+     * 底部切換輸入法/收起鍵盤圖標顯示模式：
+     * "auto": 自動偵測（當系統導航欄已有切換圖標時自動隱藏圖標，始終保留人體工學底欄留白）
+     * "hide": 始終隱藏圖標（僅保留留白空欄）
+     * "show": 始終顯示圖標
      */
     var bottomNavBarMode: String
         get() = prefs.getString("bottom_nav_bar_mode", "auto") ?: "auto"

@@ -164,7 +164,7 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
         keyboardView.layoutParams = (keyboardView.layoutParams as LinearLayout.LayoutParams).apply {
             height = heightInPx
         }
-        keyboardView.shouldShowBottomNavBar = resolveShouldShowBottomNavBar()
+        keyboardView.shouldShowBottomIcons = resolveShouldShowBottomIcons()
         resetComposing()
         // 關鍵防閃爍修復：只有全新彈出鍵盤時才完整重構鍵盤；如果是輸入過程中的 restarting 回調，絕對不可重建！
         if (!restarting) {
@@ -173,18 +173,18 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
     }
 
     /**
-     * 智能判斷是否需要顯示自定義底部導航欄（地球 + 收起鍵盤）：
-     * 1. 用戶設置優先：若設置為 "hide" 則直接隱藏，若設置為 "show" 則始終顯示；
-     * 2. 若設置為 "auto"（默認）：
-     *    - 檢查系統 API `shouldOfferSwitchingToNextInputMethod()`：若系統導航欄已有輸入法切換按鈕，返回 false（隱藏）；
-     *    - 若系統已提供原生切換功能，自動隱藏自定義欄，杜絕與系統原生地球/鍵盤按鈕重複！
+     * 智能判斷是否需要顯示底部欄中的地球與鍵盤圖標：
+     * 1. 底部欄目（BottomNavBar）本身的高度與人體工學留白始終保留，防止按鍵被壓到最底邊；
+     * 2. 圖標顯示判斷：
+     *    - "hide": 隱藏圖標（保持留白空欄）
+     *    - "show": 顯示圖標
+     *    - "auto": 當檢測到系統導航欄已有原生地球/切換按鈕時，自動隱藏圖標；無原生支持時才顯示圖標。
      */
-    private fun resolveShouldShowBottomNavBar(): Boolean {
+    private fun resolveShouldShowBottomIcons(): Boolean {
         return when (settings.bottomNavBarMode) {
             "hide" -> false
             "show" -> true
             else -> {
-                // "auto" 模式：如果系統已經提供切換到下一輸入法的原生能力（如導航欄按鍵/手勢按鈕），則自動隱藏
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     !shouldOfferSwitchingToNextInputMethod()
                 } else {

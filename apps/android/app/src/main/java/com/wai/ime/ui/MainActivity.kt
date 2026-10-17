@@ -306,15 +306,15 @@ class MainActivity : AppCompatActivity() {
 
         addDivider(card)
 
-        // 底部導航欄（地球與收起鍵盤）顯示設置
-        val navModeLabels = arrayOf("自動隱藏（當系統已有功能時）", "始終隱藏（最大化鍵盤面積）", "始終顯示")
+        // 底部導航欄圖標（地球與收起鍵盤）顯示設置
+        val navModeLabels = arrayOf("自動隱藏圖標（系統已有時）", "始終隱藏圖標（僅保留底欄空間）", "始終顯示圖標")
         val navModeValues = arrayOf("auto", "hide", "show")
         val currentNavIndex = navModeValues.indexOf(settings.bottomNavBarMode).let { if (it >= 0) it else 0 }
 
-        card.addView(createClickableRow("底部輸入法切換欄", navModeLabels[currentNavIndex]) { summaryView ->
+        card.addView(createClickableRow("底部切換與收起圖標", navModeLabels[currentNavIndex]) { summaryView ->
             val checked = navModeValues.indexOf(settings.bottomNavBarMode).let { if (it >= 0) it else 0 }
             AlertDialog.Builder(this)
-                .setTitle("底部輸入法切換欄顯示")
+                .setTitle("底部切換與收起圖標顯示")
                 .setSingleChoiceItems(navModeLabels, checked) { dialog, which ->
                     settings.bottomNavBarMode = navModeValues[which]
                     summaryView.text = navModeLabels[which]

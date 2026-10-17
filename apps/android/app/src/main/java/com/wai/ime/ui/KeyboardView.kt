@@ -48,8 +48,8 @@ class KeyboardView(context: Context) : LinearLayout(context) {
     var onHideKeyboardListener: (() -> Unit)? = null
     var onEnglishModeToggleListener: ((Boolean) -> Unit)? = null
 
-    /** 是否需要顯示底部切換輸入法導航欄（根據系統導航模式與用戶設定智能判斷） */
-    var shouldShowBottomNavBar: Boolean = false
+    /** 是否需要顯示底部欄中的地球與鍵盤圖標（根據系統導航模式與用戶設定智能判斷，底欄本身始終保留留白） */
+    var shouldShowBottomIcons: Boolean = false
         set(value) {
             if (field != value) {
                 field = value
@@ -135,11 +135,9 @@ class KeyboardView(context: Context) : LinearLayout(context) {
 
         addView(keysContainer)
 
-        // 底部獨立切換輸入法欄（地球圖標 + 收起鍵盤圖標）：
-        // 若系統導航欄（或全面屏手勢鍵盤下沉區域）已內建切換按鈕，智能隱藏此欄，杜絕界面重複冗餘
-        if (shouldShowBottomNavBar) {
-            addView(createBottomNavBar())
-        }
+        // 底部獨立留白欄（保留舒適人體工學下沉間隙）：
+        // 若系統導航欄已有原生地球/鍵盤圖標，僅隱藏裡面的圖標按鈕，始終保留該行的高度與留白
+        addView(createBottomNavBar())
     }
 
     // ================= 1. 拼音/字母 鍵盤 (雙層按鍵 + 舒適長按) =================
@@ -611,6 +609,11 @@ class KeyboardView(context: Context) : LinearLayout(context) {
                 setMargins(0, dpToPx(2), 0, 0)
             }
             setBackgroundColor(Color.TRANSPARENT)
+        }
+
+        // 若系統導航欄已有原生地球和鍵盤圖標，僅隱藏裡面的圖標，但保留該欄目的高度與位置空間
+        if (!shouldShowBottomIcons) {
+            return navBar
         }
 
         // 1. 地球圖標（切換輸入法）：短按切換，長按彈出系統選擇輸入法菜單
