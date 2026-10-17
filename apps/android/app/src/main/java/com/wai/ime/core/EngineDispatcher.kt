@@ -15,6 +15,7 @@ sealed interface EngineAction {
     data class Push(val ch: Char, val sessionId: Long, val requestId: Long) : EngineAction
     data class Backspace(val sessionId: Long, val requestId: Long) : EngineAction
     data class Clear(val sessionId: Long) : EngineAction
+    data class QueryEnglish(val prefix: String, val sessionId: Long, val requestId: Long) : EngineAction
     data class CommitCandidate(
         val index: Int,
         val expectedText: String,
@@ -133,6 +134,13 @@ class EngineDispatcher(private val listener: EngineDispatcherListener) {
         return rId
     }
 
+    fun enqueueQueryEnglish(prefix: String): Long {
+        val sId = currentSessionId
+        val rId = requestCounter.incrementAndGet()
+        enqueue(EngineAction.QueryEnglish(prefix, sId, rId))
+        return rId
+    }
+
     private fun enqueue(action: EngineAction) {
         synchronized(actionQueue) {
             actionQueue.addLast(action)
@@ -188,6 +196,17 @@ class EngineDispatcher(private val listener: EngineDispatcherListener) {
                     lastQueryUptime = 0L
                     mainHandler.post {
                         listener.onCandidatesUpdated(CandidateResult(action.sessionId, 0L, "", emptyList()))
+                    }
+                }
+                is EngineAction.QueryEnglish -> {
+                    if (action.sessionId == currentSessionId) {
+                        hasTextMutated = false
+                        val state = WaiNativeEngine.queryEnglish(action.prefix, 15)
+                        executedQueryCount.incrementAndGet()
+                        val res = CandidateResult(action.sessionId, action.requestId, state.preedit, state.candidates)
+                        mainHandler.post {
+                            listener.onCandidatesUpdated(res)
+                        }
                     }
                 }
                 is EngineAction.CommitCandidate -> {

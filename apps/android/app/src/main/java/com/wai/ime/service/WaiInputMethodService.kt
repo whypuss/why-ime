@@ -272,10 +272,27 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
     }
 
     private fun handleKeyInput(key: String) {
-        // 純英文模式下，直接上屏英文字符，不走中文拼音邏輯
+        // 純英文輸入聯想模式：進入英文 Preedit 暫存與單詞聯想
         if (keyboardView.isEnglishMode) {
-            currentInputConnection?.commitText(key, 1)
-            return
+            if (key.length == 1 && key[0].lowercaseChar() in 'a'..'z') {
+                val ch = key[0].lowercaseChar()
+                localPreedit += ch
+                updateHeaderMode(true)
+                if (::candidateBarView.isInitialized) {
+                    candidateBarView.updatePreeditOnly(localPreedit)
+                }
+                currentInputConnection?.setComposingText(localPreedit, 1)
+                dispatcher.enqueueQueryEnglish(localPreedit)
+                return
+            } else {
+                // 標點符號、空格或特殊字符：先將當前英文 preedit 上屏
+                if (localPreedit.isNotEmpty()) {
+                    currentInputConnection?.commitText(localPreedit, 1)
+                    resetComposing()
+                }
+                currentInputConnection?.commitText(key, 1)
+                return
+            }
         }
 
         // 單個英文字母，進入拼音/雙拼處理
@@ -326,7 +343,18 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
      */
     private fun handleKeyLongPressReplace(originalKey: String, replacementKey: String) {
         if (keyboardView.isEnglishMode) {
-            currentInputConnection?.deleteSurroundingText(1, 0)
+            if (localPreedit.isNotEmpty() && localPreedit.endsWith(originalKey.lowercase())) {
+                localPreedit = localPreedit.dropLast(1)
+                if (localPreedit.isNotEmpty()) {
+                    currentInputConnection?.setComposingText(localPreedit, 1)
+                    if (::candidateBarView.isInitialized) {
+                        candidateBarView.updatePreeditOnly(localPreedit)
+                    }
+                    dispatcher.enqueueQueryEnglish(localPreedit)
+                } else {
+                    resetComposing()
+                }
+            }
             currentInputConnection?.commitText(replacementKey, 1)
             return
         }
@@ -359,7 +387,21 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
     private fun handleBackspace() {
         if (keyboardView.isEnglishMode) {
-            currentInputConnection?.deleteSurroundingText(1, 0)
+            if (localPreedit.isNotEmpty()) {
+                localPreedit = localPreedit.dropLast(1)
+                if (localPreedit.isNotEmpty()) {
+                    currentInputConnection?.setComposingText(localPreedit, 1)
+                    if (::candidateBarView.isInitialized) {
+                        candidateBarView.updatePreeditOnly(localPreedit)
+                    }
+                    updateHeaderMode(true)
+                    dispatcher.enqueueQueryEnglish(localPreedit)
+                } else {
+                    resetComposing()
+                }
+            } else {
+                currentInputConnection?.deleteSurroundingText(1, 0)
+            }
             return
         }
 
@@ -382,7 +424,16 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
     private fun handleSpace() {
         if (keyboardView.isEnglishMode) {
-            currentInputConnection?.commitText(" ", 1)
+            if (currentCandidates.isNotEmpty()) {
+                // 英文模式下空格：直接選中第 1 個聯想補全單詞（若開啟輸出翻譯則直接上屏外語）
+                commitCandidateByIndex(0)
+            } else if (localPreedit.isNotEmpty()) {
+                // 若無匹配候選，上屏輸入的原始英文字母加空格
+                currentInputConnection?.commitText("$localPreedit ", 1)
+                resetComposing()
+            } else {
+                currentInputConnection?.commitText(" ", 1)
+            }
             return
         }
 
@@ -402,7 +453,13 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
 
     private fun handleEnter() {
         if (keyboardView.isEnglishMode) {
-            sendKeyChar('\n')
+            if (localPreedit.isNotEmpty()) {
+                // 回車將當前輸入的原始英文字符原樣上屏
+                currentInputConnection?.commitText(localPreedit, 1)
+                resetComposing()
+            } else {
+                sendKeyChar('\n')
+            }
             return
         }
 
@@ -553,6 +610,17 @@ class WaiInputMethodService : InputMethodService(), EngineDispatcherListener {
             // 空格或按鍵選中候選詞時，同樣觸發選詞震動反饋
             VibrationHelper.vibrate(this, candidateBarView, settings, isCandidateSelect = true)
             val cand = currentCandidates[index]
+            if (keyboardView.isEnglishMode) {
+                // 英文模式下：若開啟了「輸出翻譯」，且該單詞有翻譯，則輸出翻譯文本；否則輸出補全的英文單詞
+                val textToCommit = if (settings.outputTranslationMode && cand.hasTranslation && !cand.translationText.isNullOrEmpty()) {
+                    cand.translationText
+                } else {
+                    cand.text
+                }
+                currentInputConnection?.commitText(textToCommit, 1)
+                resetComposing()
+                return
+            }
             dispatcher.enqueueCommit(index, cand.text, settings.outputTranslationMode)
         } else if (localPreedit.isNotEmpty()) {
             currentInputConnection?.commitText(localPreedit, 1)

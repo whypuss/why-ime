@@ -12,6 +12,7 @@ qingjian-core = { workspace = true }
 qingjian-dictionary = { workspace = true }
 qingjian-translate = { workspace = true }
 qingjian-format = { workspace = true }
+memmap2 = { workspace = true }
 jni = "0.21"
 serde = { workspace = true }
 serde_json = { workspace = true }

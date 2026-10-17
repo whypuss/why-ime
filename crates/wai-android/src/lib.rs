@@ -5,6 +5,9 @@
 
 use std::sync::Mutex;
 
+mod english_lexicon;
+use english_lexicon::EnglishLexicon;
+
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jint, jlong, jstring};
@@ -86,10 +89,11 @@ pub struct EngineStateDto {
 pub struct WaiEngineHandle {
     pub engine: Engine,
     pub last_query: Option<Query>,
+    pub english_lexicon: Option<EnglishLexicon>,
 }
 
 impl WaiEngineHandle {
-    pub fn new(dict_path: &str, glossary_path: &str, target_lang: Language) -> Result<Self, String> {
+    pub fn new(dict_path: &str, glossary_path: &str, target_lang: Language, en_lexicon_path: &str) -> Result<Self, String> {
         let dictionary = Dictionary::from_path(dict_path)
             .map_err(|e| format!("加載詞庫失敗: {e}"))?;
 
@@ -109,9 +113,22 @@ impl WaiEngineHandle {
             }
         }
 
+        let english_lexicon = if !en_lexicon_path.is_empty() {
+            match EnglishLexicon::open(en_lexicon_path) {
+                Ok(lex) => Some(lex),
+                Err(e) => {
+                    tracing::warn!("加載英文詞典失敗: {e}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Ok(Self {
             engine,
             last_query: None,
+            english_lexicon,
         })
     }
 
@@ -253,6 +270,48 @@ impl WaiEngineHandle {
         }
     }
 
+    pub fn query_english(&self, prefix: &str, limit: usize) -> EngineStateDto {
+        let prefix_clean = prefix.trim();
+        if prefix_clean.is_empty() {
+            return EngineStateDto {
+                preedit: String::new(),
+                candidates: Vec::new(),
+                is_composing: false,
+            };
+        }
+
+        let candidates = if let Some(ref lexicon) = self.english_lexicon {
+            let hits = lexicon.query_prefix(prefix_clean, limit);
+            hits.into_iter().map(|h| {
+                let has_trans = !h.zh.is_empty() || !h.ja.is_empty();
+                // 優先顯示日語假名（若有），次選中文釋義
+                let (trans_text, reading, pos) = if !h.ja.is_empty() {
+                    (Some(h.ja), if h.reading.is_empty() { None } else { Some(h.reading) }, if h.pos.is_empty() { None } else { Some(h.pos) })
+                } else if !h.zh.is_empty() {
+                    (Some(h.zh), None, if h.pos.is_empty() { None } else { Some(h.pos) })
+                } else {
+                    (None, None, None)
+                };
+
+                CandidateDto {
+                    text: h.word,
+                    has_translation: has_trans,
+                    translation_text: trans_text,
+                    reading,
+                    pos,
+                }
+            }).collect()
+        } else {
+            Vec::new()
+        };
+
+        EngineStateDto {
+            preedit: prefix_clean.to_string(),
+            candidates,
+            is_composing: true,
+        }
+    }
+
     fn update_query(&mut self) -> EngineStateDto {
         let preedit = self.engine.raw_preedit().text;
         if preedit.is_empty() {
@@ -316,6 +375,7 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCreate(
     dict_path: JString,
     glossary_path: JString,
     lang_code: JString,
+    en_lexicon_path: JString,
 ) -> jlong {
     let dict_path: String = match env.get_string(&dict_path) {
         Ok(s) => s.into(),
@@ -329,10 +389,14 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeCreate(
         Ok(s) => s.into(),
         Err(_) => "ja".to_string(),
     };
+    let en_lexicon_path: String = match env.get_string(&en_lexicon_path) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
 
     let target_lang = lang_code.parse::<Language>().unwrap_or(Language::Japanese);
 
-    match WaiEngineHandle::new(&dict_path, &glossary_path, target_lang) {
+    match WaiEngineHandle::new(&dict_path, &glossary_path, target_lang, &en_lexicon_path) {
         Ok(handle) => Box::into_raw(Box::new(Mutex::new(handle))) as jlong,
         Err(e) => {
             let _ = env.throw_new("java/lang/RuntimeException", e);
@@ -585,6 +649,33 @@ pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeQuery(
     };
 
     let state = handle.query_candidates();
+    let json = serde_json::to_string(&state).unwrap_or_default();
+    env.new_string(json).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_wai_ime_core_WaiNativeEngine_nativeQueryEnglish(
+    mut env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    prefix: JString,
+    limit: jint,
+) -> jstring {
+    if ptr == 0 {
+        return env.new_string("").unwrap().into_raw();
+    }
+    let prefix_str: String = match env.get_string(&prefix) {
+        Ok(s) => s.into(),
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let handle_mutex = unsafe { &*(ptr as *mut Mutex<WaiEngineHandle>) };
+    let handle = match handle_mutex.lock() {
+        Ok(h) => h,
+        Err(_) => return env.new_string("").unwrap().into_raw(),
+    };
+
+    let state = handle.query_english(&prefix_str, (limit as usize).max(1));
     let json = serde_json::to_string(&state).unwrap_or_default();
     env.new_string(json).unwrap_or_else(|_| env.new_string("").unwrap()).into_raw()
 }

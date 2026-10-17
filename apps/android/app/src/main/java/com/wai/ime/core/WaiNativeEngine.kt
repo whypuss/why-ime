@@ -31,13 +31,15 @@ object WaiNativeEngine {
         try {
             val dictFile = copyAssetToFile(context, "dict.tsv", "dict.tsv")
             val glossaryFile = copyAssetToFile(context, "glossary-ja.tsv", "glossary-ja.tsv")
+            val enLexiconFile = copyAssetToFile(context, "en_lexicon.bin", "en_lexicon.bin")
 
-            Log.i(TAG, "加載詞典檔案: ${dictFile.absolutePath}, 釋義: ${glossaryFile.absolutePath}")
+            Log.i(TAG, "加載詞典檔案: ${dictFile.absolutePath}, 釋義: ${glossaryFile.absolutePath}, 英文詞庫: ${enLexiconFile.absolutePath}")
 
             nativeHandle = nativeCreate(
                 dictPath = dictFile.absolutePath,
                 glossaryPath = glossaryFile.absolutePath,
-                langCode = langCode
+                langCode = langCode,
+                enLexiconPath = enLexiconFile.absolutePath
             )
 
             isInitialized = nativeHandle != 0L
@@ -114,6 +116,12 @@ object WaiNativeEngine {
         return EngineState.fromJson(json)
     }
 
+    fun queryEnglish(prefix: String, limit: Int = 15): EngineState {
+        if (!isInitialized || nativeHandle == 0L) return EngineState(prefix, emptyList(), false)
+        val json = nativeQueryEnglish(nativeHandle, prefix, limit)
+        return EngineState.fromJson(json)
+    }
+
     fun commitCandidateVerified(index: Int, expectedText: String): String {
         if (!isInitialized || nativeHandle == 0L) return ""
         return nativeCommitCandidateVerified(nativeHandle, index, expectedText)
@@ -181,7 +189,7 @@ object WaiNativeEngine {
     }
 
     // ================= Native 外部聲明 =================
-    private external fun nativeCreate(dictPath: String, glossaryPath: String, langCode: String): Long
+    private external fun nativeCreate(dictPath: String, glossaryPath: String, langCode: String, enLexiconPath: String): Long
     private external fun nativeDestroy(ptr: Long)
     private external fun nativeFeedChar(ptr: Long, ch: Int): String
     private external fun nativeBackspace(ptr: Long): String
@@ -192,6 +200,7 @@ object WaiNativeEngine {
     private external fun nativeBackspaceFast(ptr: Long): String
     private external fun nativeClearFast(ptr: Long)
     private external fun nativeQuery(ptr: Long): String
+    private external fun nativeQueryEnglish(ptr: Long, prefix: String, limit: Int): String
     private external fun nativeCommitCandidateVerified(ptr: Long, index: Int, expectedText: String): String
     private external fun nativeCommitTranslationVerified(ptr: Long, index: Int, expectedText: String): String
     private external fun nativeGetRawPreedit(ptr: Long): String

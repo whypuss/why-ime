@@ -5332,6 +5332,7 @@ name = "wai-android"
 version = "0.1.0"
 dependencies = [
  "jni 0.21.1",
+ "memmap2",
  "qingjian-core",
  "qingjian-dictionary",
  "qingjian-format",
